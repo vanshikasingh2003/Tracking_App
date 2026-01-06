@@ -1,0 +1,255 @@
+/* =========================
+   🎮 MINECRAFT UI BASE
+   Mobile-first (iPhone)
+========================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  /* 🎨 Minecraft Color Palette */
+  --mc-green: #5cb85c;
+  --mc-dark-green: #3d7a3d;
+  --mc-brown: #8b5a2b;
+  --mc-stone: #6b6b6b;
+  --mc-dark: #2b2b2b;
+  --mc-gold: #f5c542;
+  --mc-diamond: #4ef2e7;
+  --mc-red: #d9534f;
+
+  font-family: 'Press Start 2P', system-ui, sans-serif;
+  line-height: 1.7;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: #ffffff;
+  background: linear-gradient(
+    180deg,
+    #2e7d32,
+    #1b5e20
+  );
+
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* =========================
+   📱 Body & Layout
+========================= */
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+
+  display: block; /* ❗ remove center forcing */
+  background: transparent;
+  text-align: center;
+}
+
+/* =========================
+   🧱 Minecraft Block Style
+========================= */
+
+.mc-block {
+  border: 4px solid #000;
+  border-radius: 6px;
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.15),
+    rgba(0,0,0,0.2)
+  );
+  box-shadow:
+    inset -3px -3px 0 rgba(0,0,0,0.4),
+    inset 3px 3px 0 rgba(255,255,255,0.25);
+}
+.mc-hero {
+  background: linear-gradient(180deg, #2e7d32, #1b5e20);
+  border: 4px solid #000;
+}
+
+.mc-action {
+  background: var(--mc-green);
+}
+
+.mc-muted {
+  background: #3f6f3f;
+}
+
+
+/* =========================
+   ✍️ Typography
+========================= */
+
+h1, h2, h3 {
+  font-family: 'Press Start 2P';
+  margin: 0.5em 0;
+}
+
+h1 {
+  font-size: 16px;
+}
+
+h2 {
+  font-size: 13px;
+}
+
+p {
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+/* =========================
+   🧾 Inputs (iPhone friendly)
+========================= */
+
+input,
+textarea,
+select {
+  width: 100%;
+  font-family: inherit;
+  font-size: 16px; /* iOS magic number (prevents zoom) */
+  padding: 14px;
+  text-align: center;
+
+  color: white;
+  background: var(--mc-dark);
+
+  border: 4px solid #000;
+  border-radius: 6px;
+}
+
+textarea {
+  min-height: 120px;
+  resize: none;
+}
+
+/* =========================
+   🔽 Dropdowns
+========================= */
+
+select {
+  background: var(--mc-stone);
+  text-align-last: center;
+}
+
+/* =========================
+   🎮 Buttons
+========================= */
+
+button {
+  width: 100%;
+  padding: 16px;
+
+  font-family: 'Press Start 2P';
+  font-size: 11px;
+
+  color: white;
+  background: var(--mc-green);
+
+  border: 4px solid #000;
+  border-radius: 6px;
+
+  cursor: pointer;
+  transition: transform 0.1s, background-color 0.1s;
+}
+
+button:active {
+  transform: translateY(3px);
+  background: var(--mc-dark-green);
+}
+
+button:focus {
+  outline: none;
+}
+
+/* =========================
+   ✨ Animations
+========================= */
+
+.pop-in {
+  animation: popIn 0.25s ease-out;
+}
+
+@keyframes popIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* =========================
+   📱 Safe Area (iPhone)
+========================= */
+
+.safe-area {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Loading dots animation */
+.loading-dots::after {
+  content: "";
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0%   { content: ""; }
+  25%  { content: "."; }
+  50%  { content: ".."; }
+  75%  { content: "..."; }
+  100% { content: ""; }
+}
+
+
+@keyframes bob {
+  0% {
+    transform: translateY(0) scale(1.15);
+  }
+  50% {
+    transform: translateY(-8px) scale(2.0);
+  }
+  100% {
+    transform: translateY(0) scale(1.15);
+  }
+}
+
+.bob {
+  animation: bob 1.3s ease-in-out infinite;
+}
+
+/* =========================
+   🃏 Minecraft Card Button
+========================= */
+
+.mc-card {
+  border: 4px solid #000;
+  border-radius: 10px;
+
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.18),
+    rgba(0,0,0,0.25)
+  );
+
+  box-shadow:
+    inset -3px -3px 0 rgba(0,0,0,0.45),
+    inset 3px 3px 0 rgba(255,255,255,0.3);
+
+  padding: 18px 16px;
+  text-align: center;
+
+  max-width: 85%;
+  margin: 0 auto;
+
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+
+.mc-card:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 2px 2px 0 rgba(0,0,0,0.5);
+}
