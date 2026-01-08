@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   getFirestore,
@@ -18,21 +18,25 @@ import {
   Dumbbell,
   Clock,
   Award,
-  Calendar,
   Trash2,
   CheckCircle,
-  Users,
   Lock,
   Unlock,
-  Activity,
   User,
   ArrowLeft,
-  Settings,
-  Loader2,
-  PauseCircle,
+  Zap,
+  Target,
+  TrendingUp,
+  Star,
+  Flame,
+  Trophy,
+  Sparkles,
+  ExternalLink,
+  Briefcase,
 } from 'lucide-react';
 
-// Firebase configuration (same as before)
+/* ==================== FIREBASE ==================== */
+
 const firebaseConfig = {
   apiKey: 'AIzaSyCX4myq_aSMqQ19Ae59qcBbvUTF6a7dx6E',
   authDomain: 'our-adventure-log.firebaseapp.com',
@@ -40,14 +44,16 @@ const firebaseConfig = {
   storageBucket: 'our-adventure-log.firebasestorage.app',
   messagingSenderId: '539205598720',
   appId: '1:539205598720:web:090d8c3955f45cbf1aa2e5',
-  measurementId: 'G-ZS0X2XSY2Y',
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+/* ==================== TYPES ==================== */
+
 type Player = 'player1' | 'player2';
-type GameMode = 'singleplayer' | 'multiplayer' | 'pvp' | null;
+type GameMode = 'singleplayer' | 'multiplayer' | null;
+type ActionType = 'workout' | 'study' | 'reading' | 'work' | 'relationship' | 'other';
 
 interface CheckIn {
   id: string;
@@ -62,7 +68,7 @@ interface Action {
   id: string;
   userId: Player;
   date: string;
-  type: string;
+  type: ActionType;
   points: number;
   timestamp: number;
   description: string;
@@ -77,108 +83,243 @@ interface Reading {
   timestamp: number;
 }
 
+interface Toast {
+  id: number;
+  message: string;
+  type: 'success' | 'xp' | 'error';
+  icon: string;
+}
+
+/* ==================== CONSTANTS ==================== */
+
+const ACTION_TYPES: { type: ActionType; icon: string; label: string; bonus: boolean }[] = [
+  { type: 'workout', icon: '💪', label: 'Workout', bonus: true },
+  { type: 'study', icon: '📖', label: 'Study', bonus: true },
+  { type: 'reading', icon: '📚', label: 'Reading', bonus: false },
+  { type: 'work', icon: '💼', label: 'Work', bonus: false },
+  { type: 'relationship', icon: '❤️', label: 'Love', bonus: false },
+  { type: 'other', icon: '⭐', label: 'Other', bonus: false },
+];
+
+/* ==================== XP / LEVEL CALCULATIONS ==================== */
+
+const calculateLevel = (totalXP: number) => {
+  const baseXP = 100;
+  const multiplier = 1.5;
+
+  let level = 1;
+  let xpNeeded = baseXP;
+  let totalUsed = 0;
+
+  while (totalXP >= totalUsed + xpNeeded) {
+    totalUsed += xpNeeded;
+    level++;
+    xpNeeded = Math.floor(baseXP * Math.pow(multiplier, level - 1));
+  }
+
+  return {
+    level,
+    currentXP: totalXP - totalUsed,
+    xpForNext: xpNeeded,
+    progress: ((totalXP - totalUsed) / xpNeeded) * 100,
+  };
+};
+
+const getLevelTitle = (level: number) => {
+  if (level >= 50) return '🏆 Legend';
+  if (level >= 40) return '👑 Champion';
+  if (level >= 30) return '⚔️ Master';
+  if (level >= 20) return '🛡️ Warrior';
+  if (level >= 10) return '⭐ Skilled';
+  return '🌱 Beginner';
+};
+
+/* ==================== MAIN COMPONENT ==================== */
+
 const ModernGoalsApp: React.FC = () => {
+  // Player & Game State
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
-  const [playerSelected, setPlayerSelected] = useState(false);
-
-  const [activeTab, setActiveTab] = useState('checkin');
-  const [checkins, setCheckins] = useState<CheckIn[]>([]);
-  const [readings, setReadings] = useState<Reading[]>([]);
-  const [achievements, setAchievements] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [gameMode, setGameMode] = useState<GameMode>(null);
+  const [activeTab, setActiveTab] = useState<'checkin' | 'actions' | 'reading' | 'stats'>('checkin');
+  const [loading, setLoading] = useState(true);
 
+  // Data State
+  const [checkins, setCheckins] = useState<CheckIn[]>([]);
   const [actions, setActions] = useState<Action[]>([]);
-  const [selectedActionType, setSelectedActionType] = useState('workout');
-  const [actionDescription, setActionDescription] = useState('');
+  const [readings, setReadings] = useState<Reading[]>([]);
 
+  // Form State
   const [checkinText, setCheckinText] = useState('');
-  const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
-
+  const [actionDescription, setActionDescription] = useState('');
+  const [selectedActionType, setSelectedActionType] = useState<ActionType>('workout');
   const [readingTitle, setReadingTitle] = useState('');
   const [readingUrl, setReadingUrl] = useState('');
 
+  // UI State
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [newLevel, setNewLevel] = useState(1);
+  const [showXPGain, setShowXPGain] = useState(false);
+  const [xpGainAmount, setXpGainAmount] = useState(0);
+
+  const today = new Date().toLocaleDateString();
+
+    /* ==================== HELPER FUNCTIONS ==================== */
+
+    const showToast = useCallback((message: string, type: 'success' | 'xp' | 'error', icon: string) => {
+      const id = Date.now();
+      setToasts((prev) => [...prev, { id, message, type, icon }]);
+      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000);
+    }, []);
+  
+    const triggerXPGain = useCallback((amount: number) => {
+      setXpGainAmount(amount);
+      setShowXPGain(true);
+      setTimeout(() => setShowXPGain(false), 1000);
+    }, []);
+  
+    const hasCheckedInToday = currentPlayer
+      ? checkins.some((c) => c.userId === currentPlayer && c.date === today)
+      : false;
+  
+    const getTotalXP = useCallback(
+      (player: Player) =>
+        checkins.filter((c) => c.userId === player).length * 10 +
+        actions.filter((a) => a.userId === player).reduce((s, a) => s + a.points, 0),
+      [checkins, actions]
+    );
+  
+    const getPlayerDailyScore = useCallback(
+      (player: Player, date: string): number => {
+        const checkedIn = checkins.some((c) => c.userId === player && c.date === date);
+        if (!checkedIn) return 0;
+  
+        const playerActions = actions.filter((a) => a.userId === player && a.date === date);
+        if (playerActions.length === 0) return 10;
+  
+        const actionPoints = playerActions.reduce((sum, a) => sum + a.points, 0);
+        return 10 + actionPoints;
+      },
+      [checkins, actions]
+    );
+  
+    const getTeamScore = useCallback(
+      (date: string): number => {
+        const p1Score = getPlayerDailyScore('player1', date);
+        const p2Score = getPlayerDailyScore('player2', date);
+        if (p1Score === 0 || p2Score === 0) return 0;
+        return Math.min(p1Score, p2Score) * 2;
+      },
+      [getPlayerDailyScore]
+    );
+  
+    const getStreak = useCallback((): { count: number; status: 'fire' | 'cold' } => {
+      if (!currentPlayer) return { count: 0, status: 'cold' };
+  
+      let streak = 0;
+      const todayDate = new Date();
+  
+      for (let i = 0; i < 30; i++) {
+        const checkDate = new Date(todayDate);
+        checkDate.setDate(todayDate.getDate() - i);
+        const dateStr = checkDate.toLocaleDateString();
+  
+        const hasCheckin = checkins.some((c) => c.userId === currentPlayer && c.date === dateStr);
+  
+        if (hasCheckin) {
+          streak++;
+        } else if (i > 0) {
+          break;
+        }
+      }
+  
+      return { count: streak, status: streak > 0 ? 'fire' : 'cold' };
+    }, [checkins, currentPlayer]);
+  
+    const getBadges = useCallback(() => {
+      if (!currentPlayer) return [];
+  
+      const playerActions = actions.filter((a) => a.userId === currentPlayer);
+      const playerCheckins = checkins.filter((c) => c.userId === currentPlayer);
+      const workoutCount = playerActions.filter((a) => a.type === 'workout').length;
+      const studyCount = playerActions.filter((a) => a.type === 'study').length;
+      const streak = getStreak().count;
+  
+      const allBadges = [
+        { icon: '💪', name: 'First Pump', desc: '1 workout', unlocked: workoutCount >= 1 },
+        { icon: '🏋️', name: 'Iron Will', desc: '5 workouts', unlocked: workoutCount >= 5 },
+        { icon: '🔥', name: 'Beast Mode', desc: '15 workouts', unlocked: workoutCount >= 15 },
+        { icon: '📖', name: 'Bookworm', desc: '5 study sessions', unlocked: studyCount >= 5 },
+        { icon: '⚡', name: 'Streak Starter', desc: '3 day streak', unlocked: streak >= 3 },
+        { icon: '🔥', name: 'On Fire', desc: '7 day streak', unlocked: streak >= 7 },
+        { icon: '🏆', name: 'Dedicated', desc: '10 check-ins', unlocked: playerCheckins.length >= 10 },
+      ];
+  
+      return allBadges.filter((b) => b.unlocked);
+    }, [actions, checkins, currentPlayer, getStreak]);
+  
+    const getActionIcon = (type: ActionType) => {
+      switch (type) {
+        case 'workout':
+          return <Dumbbell size={18} />;
+        case 'study':
+          return <Clock size={18} />;
+        case 'reading':
+          return <Book size={18} />;
+        case 'work':
+          return <Briefcase size={18} />;
+        case 'relationship':
+          return <Heart size={18} />;
+        default:
+          return <Star size={18} />;
+      }
+    };
+
+      /* ==================== USE EFFECTS ==================== */
+
+  // Load saved player from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('currentPlayer');
     if (saved === 'player1' || saved === 'player2') {
       setCurrentPlayer(saved);
-      setPlayerSelected(true);
     }
   }, []);
 
-  const getTodayDate = () => new Date().toLocaleDateString();
-
+  // Firebase listeners
   useEffect(() => {
-    if (!currentPlayer) return;
-    const today = getTodayDate();
-    const checkedIn = checkins.some(
-      (c) => c.userId === currentPlayer && c.date === today
-    );
-    setHasCheckedInToday(checkedIn);
-  }, [checkins, currentPlayer]);
-
-  useEffect(() => {
-    const checkinsQuery = query(
-      collection(db, 'checkins'),
-      orderBy('timestamp', 'desc')
-    );
-    const readingsQuery = query(
-      collection(db, 'readings'),
-      orderBy('timestamp', 'desc')
-    );
-    const achievementsQuery = query(
-      collection(db, 'achievements'),
-      orderBy('timestamp', 'desc')
-    );
-    const actionsQuery = query(
-      collection(db, 'actions'),
-      orderBy('timestamp', 'desc')
+    const unsub1 = onSnapshot(
+      query(collection(db, 'checkins'), orderBy('timestamp', 'desc')),
+      (snap) => setCheckins(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as CheckIn[])
     );
 
-    const MIN_LOADING_TIME = 5000;
-    const startTime = Date.now();
+    const unsub2 = onSnapshot(
+      query(collection(db, 'actions'), orderBy('timestamp', 'desc')),
+      (snap) => setActions(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Action[])
+    );
 
-    const unsubCheckins = onSnapshot(checkinsQuery, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as CheckIn[];
-      setCheckins(data);
+    const unsub3 = onSnapshot(
+      query(collection(db, 'readings'), orderBy('timestamp', 'desc')),
+      (snap) => setReadings(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Reading[])
+    );
 
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(MIN_LOADING_TIME - elapsed, 0);
-      setTimeout(() => setLoading(false), remaining);
-    });
-
-    const unsubReadings = onSnapshot(readingsQuery, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Reading[];
-      setReadings(data);
-    });
-
-    const unsubAchievements = onSnapshot(achievementsQuery, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setAchievements(data);
-    });
-
-    const unsubActions = onSnapshot(actionsQuery, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Action[];
-      setActions(data);
-    });
+    setTimeout(() => setLoading(false), 1500);
 
     return () => {
-      unsubCheckins();
-      unsubReadings();
-      unsubAchievements();
-      unsubActions();
+      unsub1();
+      unsub2();
+      unsub3();
     };
   }, []);
+
+  /* ==================== EVENT HANDLERS ==================== */
 
   const selectPlayer = (player: Player) => {
     setCurrentPlayer(player);
     localStorage.setItem('currentPlayer', player);
-    setPlayerSelected(true);
   };
 
   const switchPlayer = () => {
     setCurrentPlayer(null);
-    setPlayerSelected(false);
     setGameMode(null);
     localStorage.removeItem('currentPlayer');
   };
@@ -186,32 +327,40 @@ const ModernGoalsApp: React.FC = () => {
   const addCheckin = async () => {
     if (!checkinText.trim() || !currentPlayer) return;
 
+    const prevXP = getTotalXP(currentPlayer);
+    const prevLevel = calculateLevel(prevXP).level;
+
     await addDoc(collection(db, 'checkins'), {
       userId: currentPlayer,
       text: checkinText,
       timestamp: Date.now(),
-      date: getTodayDate(),
+      date: today,
       hasActions: false,
     });
 
     setCheckinText('');
-  };
+    triggerXPGain(10);
+    showToast('+10 XP Check-in complete!', 'xp', '✨');
 
-  const getActionPoints = (type: string, isFirstAction: boolean): number => {
-    if (isFirstAction) return 20;
-    if (type === 'workout' || type === 'study') return 30;
-    return 10;
+    setTimeout(() => {
+      const newXP = prevXP + 10;
+      const newLevelData = calculateLevel(newXP);
+      if (newLevelData.level > prevLevel) {
+        setNewLevel(newLevelData.level);
+        setShowLevelUp(true);
+      }
+    }, 500);
   };
 
   const addAction = async () => {
     if (!actionDescription.trim() || !currentPlayer || !hasCheckedInToday) return;
 
-    const today = getTodayDate();
-    const todayActions = actions.filter(
-      (a) => a.userId === currentPlayer && a.date === today
-    );
-    const isFirstAction = todayActions.length === 0;
-    const points = getActionPoints(selectedActionType, isFirstAction);
+    const todayActions = actions.filter((a) => a.userId === currentPlayer && a.date === today);
+    const isFirst = todayActions.length === 0;
+    const points = isFirst ? 20 : selectedActionType === 'workout' || selectedActionType === 'study' ? 30 : 10;
+
+    const prevXP = getTotalXP(currentPlayer);
+    const prevLevel = calculateLevel(prevXP).level;
 
     await addDoc(collection(db, 'actions'), {
       userId: currentPlayer,
@@ -222,40 +371,32 @@ const ModernGoalsApp: React.FC = () => {
       description: actionDescription,
     });
 
-    if (isFirstAction) {
-      const todayCheckin = checkins.find(
-        (c) => c.userId === currentPlayer && c.date === today
-      );
-      if (todayCheckin) {
-        await updateDoc(doc(db, 'checkins', todayCheckin.id), { hasActions: true });
+    if (isFirst) {
+      const checkin = checkins.find((c) => c.userId === currentPlayer && c.date === today);
+      if (checkin) {
+        await updateDoc(doc(db, 'checkins', checkin.id), { hasActions: true });
       }
     }
 
     setActionDescription('');
-  };
+    triggerXPGain(points);
 
-  const getPlayerDailyScore = (player: Player, date: string): number => {
-    const checkedIn = checkins.some((c) => c.userId === player && c.date === date);
-    if (!checkedIn) return 0;
+    const bonusText = selectedActionType === 'workout' || selectedActionType === 'study' ? ' (Bonus!)' : '';
+    showToast(`+${points} XP${bonusText}`, 'xp', '⚡');
 
-    const playerActions = actions.filter((a) => a.userId === player && a.date === date);
-    if (playerActions.length === 0) return 0;
-
-    const actionPoints = playerActions.reduce((sum, a) => sum + a.points, 0);
-    return 10 + actionPoints;
-  };
-
-  const getTeamScore = (date: string): number => {
-    const p1Score = getPlayerDailyScore('player1', date);
-    const p2Score = getPlayerDailyScore('player2', date);
-
-    if (p1Score === 0 || p2Score === 0) return 0;
-
-    return Math.min(p1Score, p2Score) * 2;
+    setTimeout(() => {
+      const newXP = prevXP + points;
+      const newLevelData = calculateLevel(newXP);
+      if (newLevelData.level > prevLevel) {
+        setNewLevel(newLevelData.level);
+        setShowLevelUp(true);
+      }
+    }, 500);
   };
 
   const addReading = async () => {
     if (!readingTitle.trim() || !currentPlayer) return;
+
     await addDoc(collection(db, 'readings'), {
       addedBy: currentPlayer,
       title: readingTitle,
@@ -263,447 +404,914 @@ const ModernGoalsApp: React.FC = () => {
       completed: false,
       timestamp: Date.now(),
     });
+
     setReadingTitle('');
     setReadingUrl('');
+    showToast('Resource added!', 'success', '📚');
   };
 
   const toggleReading = async (id: string, completed: boolean) => {
     await updateDoc(doc(db, 'readings', id), { completed: !completed });
+    if (!completed) {
+      showToast('Marked as complete!', 'success', '✅');
+    }
   };
 
   const deleteReading = async (id: string) => {
     await deleteDoc(doc(db, 'readings', id));
+    showToast('Resource removed', 'error', '🗑️');
   };
 
-  const getStreak = () => {
-    if (!currentPlayer) return '❄️ Select player';
-    const today = getTodayDate();
-    const yesterday = new Date(Date.now() - 86400000).toLocaleDateString();
+    /* ==================== RENDER LOGIC ==================== */
 
-    const hasToday = checkins.some((c) => c.userId === currentPlayer && c.date === today);
-    const hasYesterday = checkins.some((c) => c.userId === currentPlayer && c.date === yesterday);
-
-    return hasToday && hasYesterday ? '🔥 2+ days' : hasToday ? '🔥 1 day' : '❄️ Start today!';
-  };
-
-  const getBadges = () => {
-    if (!currentPlayer) return [];
-
-    const workoutCount = actions.filter((a) => a.userId === currentPlayer && a.type === 'workout').length;
-    const studyCount = actions.filter((a) => a.userId === currentPlayer && a.type === 'study').length;
-
-    const badges = [];
-    if (workoutCount >= 5) badges.push({ icon: '💪', name: 'Iron Ore', desc: '5+ workouts' });
-    if (workoutCount >= 15) badges.push({ icon: '⛏️', name: 'Diamond Pick', desc: '15+ workouts' });
-    if (studyCount >= 10) badges.push({ icon: '📚', name: 'Bookworm', desc: '10+ study hours' });
-    if (studyCount >= 25) badges.push({ icon: '💎', name: 'Study Diamond', desc: '25+ study hours' });
-
-    const playerCheckins = checkins.filter((c) => c.userId === currentPlayer);
-    if (playerCheckins.length >= 7) badges.push({ icon: '🏆', name: 'Weekly Warrior', desc: '7+ check-ins' });
-
-    return badges;
-  };
-
-  const getAchievementIcon = (type: string) => {
-    switch (type) {
-      case 'workout': return <Dumbbell size={18} color="#FFD700" />;
-      case 'study': return <Clock size={18} color="#FFD700" />;
-      case 'reading': return <Book size={18} color="#FFD700" />;
-      case 'work': return <Award size={18} color="#FFD700" />;
-      case 'relationship': return <Heart size={18} color="#FFD700" />;
-      default: return <Award size={18} color="#FFD700" />;
-    }
-  };
-
+  // Loading Screen
   if (loading) {
     return (
-      <div className="loading-screen" aria-label="Loading">
-        <Loader2 className="loading-icon" />
-        <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '8px' }}>
-          Loading Our World...
+      <div className="loading-screen">
+        <div className="loading-content">
+          <div className="loading-icon-wrapper">
+            <div className="loading-spinner"></div>
+            <span className="loading-emoji">💪</span>
+          </div>
+          <h2 className="loading-title">Our Adventure Log</h2>
+          <p className="loading-subtitle">Loading your journey...</p>
+          <div className="loading-progress">
+            <div className="loading-progress-bar"></div>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (!playerSelected || !currentPlayer) {
+  // Player Selection Screen
+  if (!currentPlayer) {
     return (
-      <div className="glass-card" style={{ maxWidth: 400, marginTop: 48 }}>
-        <header>
-          <h1>Select Your Player</h1>
-        </header>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: 24 }}>
-          Who are you?
-        </p>
-        <div style={{ display: 'flex', justifyContent: 'space-around', gap: '12px' }}>
-          <button className="btn" onClick={() => selectPlayer('player1')} aria-label="Select Player 1">
-            <div style={{ fontSize: 32 }}>❤️</div>
-            Player 1
-          </button>
-          <button className="btn" onClick={() => selectPlayer('player2')} aria-label="Select Player 2">
-            <div style={{ fontSize: 32 }}>💙</div>
-            Player 2
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!gameMode) {
-    return (
-      <div className="glass-card" style={{ maxWidth: 400, marginTop: 48 }}>
+      <div className="glass-card" style={{ marginTop: 48 }}>
         <header>
           <h1>Our Adventure Log</h1>
-          <button className="btn" onClick={switchPlayer}>Switch Player</button>
         </header>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: 24 }}>
-          Playing as: {currentPlayer === 'player1' ? '❤️ You' : '💙 Baby'}
+
+        <p style={{ textAlign: 'center', marginBottom: 24, color: 'var(--text-secondary)' }}>
+          Choose your character
         </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <button className="btn" onClick={() => setGameMode('singleplayer')}>Solo Mode 🧍</button>
-          <button className="btn" onClick={() => setGameMode('multiplayer')}>Team Mode 👥</button>
-          <button className="btn" disabled style={{ cursor: 'not-allowed', opacity: 0.5 }}>PVP Mode ⚔️ (Coming Soon)</button>
+
+        <div className="player-select-container">
+          <button className="player-btn player1" onClick={() => selectPlayer('player1')}>
+            <span className="player-emoji">❤️</span>
+            <span className="player-name">Player 1</span>
+          </button>
+
+          <button className="player-btn player2" onClick={() => selectPlayer('player2')}>
+            <span className="player-emoji">💙</span>
+            <span className="player-name">Player 2</span>
+          </button>
         </div>
       </div>
     );
   }
 
-  const today = getTodayDate();
+  // Game Mode Selection Screen
+  if (!gameMode) {
+    const totalXP = getTotalXP(currentPlayer);
+    const levelData = calculateLevel(totalXP);
+    const streak = getStreak();
+    const badges = getBadges();
+
+    return (
+      <div className="glass-card" style={{ marginTop: 24 }}>
+        <header>
+          <h1>Our Adventure Log</h1>
+          <button className="btn btn-icon" onClick={switchPlayer}>
+            <User size={20} />
+          </button>
+        </header>
+
+        {/* Player Indicator */}
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <div className={`player-indicator ${currentPlayer}`}>
+            <span className="player-indicator-emoji">{currentPlayer === 'player1' ? '❤️' : '💙'}</span>
+            <span>Playing as {currentPlayer === 'player1' ? 'Player 1' : 'Player 2'}</span>
+          </div>
+        </div>
+
+        {/* XP Bar */}
+        <div className="xp-section">
+          <div className="xp-header">
+            <div className="xp-level">
+              <div className="level-badge">
+                <span className="level-icon">⭐</span>
+                <span>Level {levelData.level}</span>
+              </div>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getLevelTitle(levelData.level)}</span>
+            </div>
+            <div className="xp-points">
+              <span>{levelData.currentXP}</span> / {levelData.xpForNext} XP
+            </div>
+          </div>
+          <div className="xp-bar-wrapper">
+            <div className="xp-bar-glow" style={{ width: `${levelData.progress}%` }}></div>
+            <div className="xp-bar-fill" style={{ width: `${levelData.progress}%` }}></div>
+          </div>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="quick-stats">
+          <div className="quick-stat">
+            <div className="quick-stat-value">{totalXP}</div>
+            <div className="quick-stat-label">Total XP</div>
+          </div>
+          <div className="quick-stat">
+            <div className="quick-stat-value">{streak.count}🔥</div>
+            <div className="quick-stat-label">Streak</div>
+          </div>
+          <div className="quick-stat">
+            <div className="quick-stat-value">{badges.length}</div>
+            <div className="quick-stat-label">Badges</div>
+          </div>
+        </div>
+
+        {/* Game Mode Buttons */}
+        <h3 style={{ textAlign: 'center', marginBottom: 16 }}>Select Mode</h3>
+
+        <div className="mode-select-container">
+          <button className="mode-btn solo" onClick={() => setGameMode('singleplayer')}>
+            <span className="mode-icon">🧍</span>
+            <div className="mode-info">
+              <div className="mode-title">Solo Mode</div>
+              <div className="mode-desc">Track your personal progress</div>
+            </div>
+          </button>
+
+          <button className="mode-btn team" onClick={() => setGameMode('multiplayer')}>
+            <span className="mode-icon">👥</span>
+            <div className="mode-info">
+              <div className="mode-title">Team Mode</div>
+              <div className="mode-desc">Grow together with your partner</div>
+            </div>
+          </button>
+
+          <button className="mode-btn pvp" disabled>
+            <span className="mode-icon">⚔️</span>
+            <div className="mode-info">
+              <div className="mode-title">PVP Mode</div>
+              <div className="mode-desc">Coming soon...</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Main App Variables
   const todayActions = actions.filter((a) => a.userId === currentPlayer && a.date === today);
   const myScore = getPlayerDailyScore(currentPlayer, today);
   const otherPlayer: Player = currentPlayer === 'player1' ? 'player2' : 'player1';
   const otherScore = getPlayerDailyScore(otherPlayer, today);
   const teamScore = getTeamScore(today);
+  const totalXP = getTotalXP(currentPlayer);
+  const levelData = calculateLevel(totalXP);
+  const streak = getStreak();
+  const badges = getBadges();
 
+  // Main App Render
   return (
-    <div className="glass-card" style={{ maxWidth: 480, margin: '24px auto' }}>
-      <header>
-        <button className="btn" onClick={() => setGameMode(null)} aria-label="Back">
-          <ArrowLeft size={24} />
-        </button>
-        <h1 style={{ flexGrow: 1, textAlign: 'center' }}>
-          {gameMode === 'multiplayer' ? 'Team Mode' : gameMode === 'pvp' ? 'PVP Mode' : 'Solo Mode'}
-        </h1>
-        <button className="btn" onClick={switchPlayer} aria-label="Switch Player">
-          <User size={24} />
-        </button>
-      </header>
-
-      {/* Scores */}
-      {gameMode === 'multiplayer' && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: 6, color: 'var(--text-accent)' }}>
-              Today's Scores
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-around', gap: '12px' }}>
-              <div>
-                <div style={{ color: '#FFD6D6', fontWeight: 600, marginBottom: 4 }}>❤️ You</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{myScore} pts</div>
-              </div>
-              <div>
-                <div style={{ color: '#ADD8FF', fontWeight: 600, marginBottom: 4 }}>💙 Baby</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{otherScore} pts</div>
-              </div>
-            </div>
+    <>
+      {/* Toast Notifications */}
+      <div className="toast-container">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast ${toast.type}`}>
+            <span className="toast-icon">{toast.icon}</span>
+            <span className="toast-message">{toast.message}</span>
           </div>
-          <div style={{ marginTop: 12, textAlign: 'center' }}>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Team Score</div>
-            <div style={{ fontSize: '30px', fontWeight: 'bold', color: 'var(--text-accent)' }}>{teamScore}</div>
-            {teamScore === 0 && (
-              <div style={{ fontSize: '13px', color: 'tomato' }}>
-                {myScore === 0 ? '⚠️ You need check-in + action' : '⏳ Waiting for partner'}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {gameMode === 'singleplayer' && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, color: 'var(--text-primary)' }}>
-          <div>Today: <strong>{myScore} pts</strong></div>
-          <div>Streak: <strong>{getStreak()}</strong></div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="tabs" role="tablist" aria-label="Sections Tabs">
-        {[
-          { id: 'checkin', icon: Heart, label: 'Check-in' },
-          { id: 'actions', icon: Award, label: 'Actions' },
-          { id: 'reading', icon: Book, label: 'Reading' },
-          { id: 'badges', icon: Calendar, label: 'Stats' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={activeTab === tab.id ? 'active' : ''}
-            aria-selected={activeTab === tab.id}
-            role="tab"
-            aria-controls={`${tab.id}-panel`}
-            id={`${tab.id}-tab`}
-          >
-            <tab.icon size={20} style={{ marginBottom: 2 }} /> {tab.label}
-          </button>
         ))}
       </div>
 
-      {/* Content Panels */}
-      <section
-        id="checkin-panel"
-        role="tabpanel"
-        aria-labelledby="checkin-tab"
-        hidden={activeTab !== 'checkin'}
-      >
-        <h2>💬 Daily Check-in</h2>
-
-        <div className={`card`} style={{ backgroundColor: hasCheckedInToday ? 'rgba(50,50,50,0.4)' : 'rgba(100,20,20,0.4)', marginBottom: '20px', justifyContent: 'center' }}>
-          {hasCheckedInToday ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#4caf50' }}>
-              <Unlock size={24} />
-              <span>✓ Checked In</span>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#f44336' }}>
-              <Lock size={24} />
-              <span>⚠️ Check-in Required</span>
-            </div>
-          )}
-        </div>
-
-        {!hasCheckedInToday && (
-          <>
-            <textarea
-              value={checkinText}
-              onChange={(e) => setCheckinText(e.target.value)}
-              placeholder="What did you do today?"
-              aria-label="Check-in text"
-            />
-            <button onClick={addCheckin} className="btn">Check In Today (+10 pts)</button>
-          </>
-        )}
-
-        <div>
-          <h3>Recent Check-ins</h3>
-          <div className="card-list" aria-live="polite" aria-relevant="additions">
-            {checkins.slice(0, 5).map((checkin) => (
-              <article key={checkin.id} className="card" role="listitem" tabIndex={0}>
-                <div style={{ fontWeight: 600, color: checkin.userId === 'player1' ? '#ff6699' : '#6699ff' }}>
-                  {checkin.userId === 'player1' ? '❤️ You' : '💙 Baby'}
-                </div>
-                <small>{checkin.date}</small>
-                <p>{checkin.text}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="actions-panel"
-        role="tabpanel"
-        aria-labelledby="actions-tab"
-        hidden={activeTab !== 'actions'}
-      >
-        <h2>🏆 Log Actions</h2>
-
-        {!hasCheckedInToday ? (
-          <div className="card" style={{ backgroundColor: 'rgba(200, 50, 50, 0.35)', justifyContent: 'center' }}>
-            <Lock size={48} color="#f44336"/>
-            <p>Check in first to unlock actions</p>
-          </div>
-        ) : (
-          <>
-            <select
-              value={selectedActionType}
-              onChange={(e) => setSelectedActionType(e.target.value)}
-              aria-label="Select action type"
-            >
-              <option value="workout">💪 Workout (+30 pts bonus)</option>
-              <option value="study">📖 Study (+30 pts bonus)</option>
-              <option value="reading">📚 Reading (+10/20 pts)</option>
-              <option value="work">💼 Work (+10/20 pts)</option>
-              <option value="relationship">❤️ Relationship (+10/20 pts)</option>
-              <option value="other">⭐ Other (+10/20 pts)</option>
-            </select>
-            <input
-              value={actionDescription}
-              onChange={(e) => setActionDescription(e.target.value)}
-              placeholder="What did you do?"
-              aria-label="Action description"
-            />
-            <button onClick={addAction} className="btn" disabled={!hasCheckedInToday}>
-              Log Action {todayActions.length === 0 ? '(+20 pts)' : '(+10-30 pts)'}
+      {/* Level Up Modal */}
+      {showLevelUp && (
+        <div className="level-up-overlay" onClick={() => setShowLevelUp(false)}>
+          <div className="level-up-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="level-up-icon">🎉</div>
+            <div className="level-up-title">LEVEL UP!</div>
+            <div className="level-up-level">{newLevel}</div>
+            <div className="level-up-message">{getLevelTitle(newLevel)} - Keep pushing!</div>
+            <button className="level-up-btn" onClick={() => setShowLevelUp(false)}>
+              Awesome!
             </button>
+          </div>
+        </div>
+      )}
 
-            <div style={{ marginTop: '16px' }}>
-              <h3>📊 Scoring:</h3>
-              <ul>
-                <li>• Check-in: +10</li>
-                <li>• First action: +20</li>
-                <li>• Extra actions: +10</li>
-                <li>• Workout/Study bonus: +30</li>
-              </ul>
-            </div>
+      <div className="glass-card">
+        {/* Header */}
+        <header>
+          <button className="btn btn-icon" onClick={() => setGameMode(null)}>
+            <ArrowLeft size={20} />
+          </button>
+          <h1>{gameMode === 'multiplayer' ? 'Team Mode' : 'Solo Mode'}</h1>
+          <button className="btn btn-icon" onClick={switchPlayer}>
+            <User size={20} />
+          </button>
+        </header>
 
-            <div style={{marginTop: '20px'}}>
-              <h3>Today's Actions ({todayActions.length})</h3>
-              <div className="card-list">
-                {todayActions.map((action) => (
-                  <article key={action.id} className="card" role="listitem">
-                    <span>{getAchievementIcon(action.type)}</span>
-                    <div className="description">
-                      <p>{action.description}</p>
-                      <small>{action.type}</small>
-                    </div>
-                    <div style={{ color: '#4caf50' }}>+{action.points}</div>
-                  </article>
-                ))}
+        {/* XP Bar Section */}
+        <div className="xp-section">
+          <div className="xp-header">
+            <div className="xp-level">
+              <div className={`level-badge ${showXPGain ? 'leveling-up' : ''}`}>
+                <span className="level-icon">⭐</span>
+                <span>Lv. {levelData.level}</span>
               </div>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getLevelTitle(levelData.level)}</span>
             </div>
+            <div className="xp-points">
+              <span>{levelData.currentXP}</span> / {levelData.xpForNext} XP
+              {showXPGain && <span className="xp-gain-popup">+{xpGainAmount}</span>}
+            </div>
+          </div>
+          <div className="xp-bar-wrapper">
+            <div className="xp-bar-glow" style={{ width: `${levelData.progress}%` }}></div>
+            <div className="xp-bar-fill" style={{ width: `${levelData.progress}%` }}></div>
+          </div>
+        </div>
 
-            <div style={{marginTop: '20px'}}>
-              <h3>Recent Actions</h3>
-              <div className="card-list" style={{maxHeight: '220px'}}>
-                {actions.filter(a => a.date !== today).slice(0, 5).map((action) => (
-                  <article key={action.id} className="card" role="listitem">
-                    <span style={{color: action.userId === 'player1' ? '#ff6699' : '#6699ff'}}>
-                      {getAchievementIcon(action.type)}
-                    </span>
-                    <div className="description">
-                      <p>{action.description}</p>
-                      <small>{action.date}</small>
-                    </div>
-                    <span style={{ color: action.userId === 'player1' ? '#ff6699' : '#6699ff' }}>
-                      {action.userId === 'player1' ? '❤️' : '💙'}
-                    </span>
-                  </article>
-                ))}
+                {/* Score Section - Team Mode */}
+                {gameMode === 'multiplayer' && (
+          <div className="score-section">
+            <div className="score-card">
+              <div className="score-card-header">
+                <div className="score-card-title">Today's Battle</div>
               </div>
-            </div>
-          </>
-        )}
-      </section>
 
-      <section
-        id="reading-panel"
-        role="tabpanel"
-        aria-labelledby="reading-tab"
-        hidden={activeTab !== 'reading'}
-      >
-        <h2>📚 Shared Reading List</h2>
-        <input
-          value={readingTitle}
-          onChange={(e) => setReadingTitle(e.target.value)}
-          placeholder="Article/Video title"
-          aria-label="Reading title"
-        />
-        <input
-          value={readingUrl}
-          onChange={(e) => setReadingUrl(e.target.value)}
-          placeholder="URL (optional)"
-          aria-label="Reading URL"
-        />
-        <button onClick={addReading} className="btn">Add Resource</button>
-
-        <div className="card-list" style={{maxHeight: '250px', marginTop: 16}}>
-          {readings.map((reading) => (
-            <article
-              key={reading.id}
-              className="card"
-              style={{backgroundColor: reading.completed ? 'rgba(50,150,50,0.2)' : 'var(--panel-bg)'}}
-              role="listitem"
-              tabIndex={0}
-            >
-              <div className="description" style={{flexGrow: 1}}>
-                <div style={{color: reading.addedBy === 'player1' ? '#ff6699' : '#6699ff', marginBottom: 4}}>
-                  {reading.addedBy === 'player1' ? '❤️' : '💙'}
-                  <span style={{marginLeft: 8, textDecoration: reading.completed ? 'line-through' : 'none'}}>
-                    {reading.title}
-                  </span>
+              <div className="score-players">
+                <div className={`score-player player1 ${currentPlayer === 'player1' ? 'current' : ''}`}>
+                  <div className="score-player-emoji">❤️</div>
+                  <div className="score-player-name">Player 1</div>
+                  <div className="score-player-points">{getPlayerDailyScore('player1', today)}</div>
                 </div>
-                {reading.url && (
-                  <a href={reading.url} target="_blank" rel="noopener noreferrer" style={{color: '#1e90ff', fontSize: '12px'}}>
-                    🔗 Link
-                  </a>
+
+                <div className={`score-player player2 ${currentPlayer === 'player2' ? 'current' : ''}`}>
+                  <div className="score-player-emoji">💙</div>
+                  <div className="score-player-name">Player 2</div>
+                  <div className="score-player-points">{getPlayerDailyScore('player2', today)}</div>
+                </div>
+              </div>
+
+              {/* Team Score */}
+              <div className="score-team">
+                <div className="score-team-label">Team Score</div>
+                <div className="score-team-points">{teamScore}</div>
+                {teamScore === 0 && (
+                  <div className={`score-team-status ${myScore === 0 ? 'warning' : 'waiting'}`}>
+                    {myScore === 0 ? '⚠️ Check-in + action needed!' : '⏳ Waiting for partner...'}
+                  </div>
                 )}
+                {teamScore > 0 && <div className="score-team-status success">🎉 Both players active!</div>}
               </div>
-              <div>
-                <button onClick={() => toggleReading(reading.id, reading.completed)} aria-label={reading.completed ? 'Mark incomplete' : 'Mark complete'}>
-                  <CheckCircle size={20} color={reading.completed ? '#4caf50' : '#999'} />
-                </button>
-                <button onClick={() => deleteReading(reading.id)} aria-label="Delete reading" style={{marginLeft: '8px'}}>
-                  <Trash2 size={20} color="#f44336" />
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section
-        id="badges-panel"
-        role="tabpanel"
-        aria-labelledby="badges-tab"
-        hidden={activeTab !== 'badges'}
-      >
-        <h2>🏅 Badges & Stats</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 24 }}>
-          {getBadges().map((badge, idx) => (
-            <div key={idx} className="card" style={{flexDirection: 'column', alignItems: 'center', textAlign: 'center'}}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>{badge.icon}</div>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{badge.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{badge.desc}</div>
-            </div>
-          ))}
-          {getBadges().length === 0 && (
-            <div style={{ gridColumn: 'span 2', color: 'var(--text-secondary)', fontSize: 14, textAlign: 'center', padding: 24 }}>
-              Keep grinding to earn badges! 💪
-            </div>
-          )}
-        </div>
-
-        <div className="card" style={{ flexDirection: 'column', gap: 14 }}>
-          <h3>Your Stats</h3>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Today's Score:</span><span style={{ fontWeight: 600, color: '#4caf50' }}>{myScore} pts</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Total Actions:</span><span style={{ fontWeight: 600 }}>{actions.filter((a) => a.userId === currentPlayer).length}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Total Check-ins:</span><span style={{ fontWeight: 600 }}>{checkins.filter((c) => c.userId === currentPlayer).length}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Resources Shared:</span><span style={{ fontWeight: 600 }}>{readings.filter((r) => r.addedBy === currentPlayer).length}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Streak:</span><span style={{ fontWeight: 600 }}>{getStreak()}</span>
-          </div>
-        </div>
-
-        {gameMode === 'multiplayer' && (
-          <div className="card" style={{ marginTop: 20, flexDirection: 'column', gap: 14 }}>
-            <h3>👥 Team Stats</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Today's Team Score:</span><span style={{ fontWeight: 600, color: 'var(--text-accent)' }}>{teamScore} pts</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>❤️ Your Score:</span><span style={{ fontWeight: 600, color: '#ff6699' }}>{myScore} pts</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>💙 Partner Score:</span><span style={{ fontWeight: 600, color: '#6699ff' }}>{otherScore} pts</span>
             </div>
           </div>
         )}
-      </section>
 
-      <footer style={{ marginTop: 24 }}>
-        <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
-          Building our future together, one step at a time 💚
+        {/* Score Section - Solo Mode */}
+        {gameMode === 'singleplayer' && (
+          <div className="quick-stats" style={{ marginBottom: 20 }}>
+            <div className="quick-stat">
+              <div className="quick-stat-value" style={{ color: 'var(--accent-green)' }}>
+                {myScore}
+              </div>
+              <div className="quick-stat-label">Today's XP</div>
+            </div>
+            <div className="quick-stat">
+              <div className="quick-stat-value" style={{ color: 'var(--accent-orange)' }}>
+                {streak.count}🔥
+              </div>
+              <div className="quick-stat-label">Streak</div>
+            </div>
+            <div className="quick-stat">
+              <div className="quick-stat-value" style={{ color: 'var(--accent-gold)' }}>
+                {totalXP}
+              </div>
+              <div className="quick-stat-label">Total XP</div>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs Navigation */}
+        <div className="tabs">
+          <button className={activeTab === 'checkin' ? 'active' : ''} onClick={() => setActiveTab('checkin')}>
+            <Heart size={18} className="tab-icon" />
+            <span>Check-in</span>
+          </button>
+          <button className={activeTab === 'actions' ? 'active' : ''} onClick={() => setActiveTab('actions')}>
+            <Zap size={18} className="tab-icon" />
+            <span>Actions</span>
+          </button>
+          <button className={activeTab === 'reading' ? 'active' : ''} onClick={() => setActiveTab('reading')}>
+            <Book size={18} className="tab-icon" />
+            <span>Reading</span>
+          </button>
+          <button className={activeTab === 'stats' ? 'active' : ''} onClick={() => setActiveTab('stats')}>
+            <Trophy size={18} className="tab-icon" />
+            <span>Stats</span>
+          </button>
         </div>
-      </footer>
-    </div>
+
+                {/* ==================== CHECK-IN TAB ==================== */}
+                {activeTab === 'checkin' && (
+          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+            <h2>
+              <Sparkles size={20} />
+              Daily Check-in
+            </h2>
+
+            {/* Check-in Status */}
+            <div className={`checkin-status ${hasCheckedInToday ? 'unlocked' : 'locked'}`}>
+              {hasCheckedInToday ? (
+                <>
+                  <Unlock size={24} className="status-icon" />
+                  <span className="status-text">✓ Checked in today!</span>
+                </>
+              ) : (
+                <>
+                  <Lock size={24} className="status-icon" />
+                  <span className="status-text">Check-in to unlock actions</span>
+                </>
+              )}
+            </div>
+
+            {/* Check-in Form */}
+            {!hasCheckedInToday && (
+              <div style={{ marginBottom: 24 }}>
+                <textarea
+                  value={checkinText}
+                  onChange={(e) => setCheckinText(e.target.value)}
+                  placeholder="How are you feeling today? What's on your mind?"
+                  rows={3}
+                />
+                <button
+                  className="btn btn-primary btn-full btn-lg"
+                  onClick={addCheckin}
+                  disabled={!checkinText.trim()}
+                >
+                  <CheckCircle size={20} />
+                  Check In (+10 XP)
+                </button>
+              </div>
+            )}
+
+            {/* Daily Goal Progress */}
+            {hasCheckedInToday && (
+              <div className="daily-goal">
+                <div className="daily-goal-header">
+                  <div className="daily-goal-title">
+                    <Target size={18} className="goal-icon" />
+                    Daily Progress
+                  </div>
+                  <div className="daily-goal-count">
+                    <span>{todayActions.length}</span> / 3 actions
+                  </div>
+                </div>
+                <div className="daily-goal-bar">
+                  <div
+                    className={`daily-goal-fill ${todayActions.length >= 3 ? 'complete' : ''}`}
+                    style={{ width: `${Math.min((todayActions.length / 3) * 100, 100)}%` }}
+                  ></div>
+                </div>
+                <div className="daily-goal-milestones">
+                  <div className={`milestone ${todayActions.length >= 1 ? 'reached' : ''}`}>
+                    <div className="milestone-dot"></div>
+                    <span>1</span>
+                  </div>
+                  <div className={`milestone ${todayActions.length >= 2 ? 'reached' : ''}`}>
+                    <div className="milestone-dot"></div>
+                    <span>2</span>
+                  </div>
+                  <div className={`milestone ${todayActions.length >= 3 ? 'reached' : ''}`}>
+                    <div className="milestone-dot"></div>
+                    <span>3</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recent Check-ins */}
+            <div className="section-divider"></div>
+            <h3>Recent Check-ins</h3>
+
+            {checkins.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">📝</div>
+                <div className="empty-state-title">No check-ins yet</div>
+                <div className="empty-state-text">Start your journey by checking in today!</div>
+              </div>
+            ) : (
+              <div className="card-list">
+                {checkins.slice(0, 5).map((checkin) => (
+                  <div key={checkin.id} className="card">
+                    <div className="card-icon checkin">{checkin.userId === 'player1' ? '❤️' : '💙'}</div>
+                    <div className="card-content">
+                      <div className="card-title">{checkin.text}</div>
+                      <div className="card-subtitle">
+                        {checkin.date} • {checkin.userId === 'player1' ? 'Player 1' : 'Player 2'}
+                      </div>
+                    </div>
+                    {checkin.hasActions && <div className="card-points">+XP</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+                {/* ==================== ACTIONS TAB ==================== */}
+                {activeTab === 'actions' && (
+          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+            <h2>
+              <Zap size={20} />
+              Log Actions
+            </h2>
+
+            {/* Locked State */}
+            {!hasCheckedInToday ? (
+              <div className="empty-state" style={{ padding: '40px 20px' }}>
+                <div className="empty-state-icon">🔒</div>
+                <div className="empty-state-title">Actions Locked</div>
+                <div className="empty-state-text">
+                  Complete your daily check-in first to unlock actions and earn XP!
+                </div>
+                <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setActiveTab('checkin')}>
+                  Go to Check-in
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Action Type Selector */}
+                <div className="action-type-grid">
+                  {ACTION_TYPES.map((action) => (
+                    <button
+                      key={action.type}
+                      className={`action-type-btn ${action.type} ${
+                        selectedActionType === action.type ? 'selected' : ''
+                      }`}
+                      onClick={() => setSelectedActionType(action.type)}
+                    >
+                      <span className="action-type-icon">{action.icon}</span>
+                      <span className="action-type-label">{action.label}</span>
+                      {action.bonus && selectedActionType === action.type && (
+                        <span style={{ fontSize: 10, color: 'var(--accent-gold)' }}>+30</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Action Input */}
+                <input
+                  type="text"
+                  value={actionDescription}
+                  onChange={(e) => setActionDescription(e.target.value)}
+                  placeholder="What did you accomplish?"
+                  onKeyPress={(e) => e.key === 'Enter' && addAction()}
+                />
+
+                <button
+                  className="btn btn-success btn-full btn-lg"
+                  onClick={addAction}
+                  disabled={!actionDescription.trim()}
+                >
+                  <Zap size={20} />
+                  Log Action (+
+                  {todayActions.length === 0
+                    ? '20'
+                    : selectedActionType === 'workout' || selectedActionType === 'study'
+                    ? '30'
+                    : '10'}{' '}
+                  XP)
+                </button>
+
+                {/* Scoring Info */}
+                <div className="scoring-info">
+                  <h3>
+                    <TrendingUp size={16} />
+                    XP Guide
+                  </h3>
+                  <ul className="scoring-list">
+                    <li>
+                      <span className="score-label">
+                        <CheckCircle size={14} />
+                        Daily Check-in
+                      </span>
+                      <span className="score-value">+10 XP</span>
+                    </li>
+                    <li>
+                      <span className="score-label">
+                        <Star size={14} />
+                        First Action
+                      </span>
+                      <span className="score-value">+20 XP</span>
+                    </li>
+                    <li>
+                      <span className="score-label">
+                        <Zap size={14} />
+                        Extra Actions
+                      </span>
+                      <span className="score-value">+10 XP</span>
+                    </li>
+                    <li>
+                      <span className="score-label">
+                        <Flame size={14} />
+                        Workout / Study
+                      </span>
+                      <span className="score-value bonus">+30 XP</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Today's Actions */}
+                {todayActions.length > 0 && (
+                  <>
+                    <div className="section-divider"></div>
+                    <h3>Today's Actions ({todayActions.length})</h3>
+                    <div className="card-list" style={{ maxHeight: 200 }}>
+                      {todayActions.map((action) => (
+                        <div key={action.id} className="card">
+                          <div className={`card-icon ${action.type}`}>{getActionIcon(action.type)}</div>
+                          <div className="card-content">
+                            <div className="card-title">{action.description}</div>
+                            <div className="card-subtitle">{action.type}</div>
+                          </div>
+                          <div className="card-points">+{action.points}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Recent Actions */}
+                <div className="section-divider"></div>
+                <h3>Recent Actions</h3>
+                {actions.filter((a) => a.date !== today).length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-state-icon">⚡</div>
+                    <div className="empty-state-title">No past actions</div>
+                    <div className="empty-state-text">Your action history will appear here</div>
+                  </div>
+                ) : (
+                  <div className="card-list" style={{ maxHeight: 220 }}>
+                    {actions
+                      .filter((a) => a.date !== today)
+                      .slice(0, 8)
+                      .map((action) => (
+                        <div key={action.id} className="card">
+                          <div className={`card-icon ${action.type}`}>{getActionIcon(action.type)}</div>
+                          <div className="card-content">
+                            <div className="card-title">{action.description}</div>
+                            <div className="card-subtitle">{action.date}</div>
+                          </div>
+                          <div className="card-meta">
+                            <span className="card-player">{action.userId === 'player1' ? '❤️' : '💙'}</span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+                {/* ==================== READING TAB ==================== */}
+                {activeTab === 'reading' && (
+          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+            <h2>
+              <Book size={20} />
+              Shared Reading List
+            </h2>
+
+            {/* Add Reading Form */}
+            <div style={{ marginBottom: 20 }}>
+              <input
+                type="text"
+                value={readingTitle}
+                onChange={(e) => setReadingTitle(e.target.value)}
+                placeholder="Article, video, or book title..."
+              />
+              <input
+                type="url"
+                value={readingUrl}
+                onChange={(e) => setReadingUrl(e.target.value)}
+                placeholder="URL (optional)"
+              />
+              <button className="btn btn-primary btn-full" onClick={addReading} disabled={!readingTitle.trim()}>
+                <Book size={18} />
+                Add Resource
+              </button>
+            </div>
+
+            {/* Reading Progress */}
+            {readings.length > 0 && (
+              <div className="progress-section">
+                <div className="progress-item">
+                  <div className="progress-header">
+                    <span className="progress-label">
+                      <CheckCircle size={14} />
+                      Completion Progress
+                    </span>
+                    <span className="progress-value">
+                      {readings.filter((r) => r.completed).length} / {readings.length}
+                    </span>
+                  </div>
+                  <div className="progress-bar">
+                    <div
+                      className="progress-fill green"
+                      style={{
+                        width: `${(readings.filter((r) => r.completed).length / readings.length) * 100}%`,
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Reading List */}
+            <div className="section-divider"></div>
+            <h3>Resources ({readings.length})</h3>
+
+            {readings.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">📚</div>
+                <div className="empty-state-title">No resources yet</div>
+                <div className="empty-state-text">Add articles, videos, or books to share with your partner!</div>
+              </div>
+            ) : (
+              <div className="card-list" style={{ maxHeight: 350 }}>
+                {readings.map((reading) => (
+                  <div key={reading.id} className={`reading-card ${reading.completed ? 'completed' : ''}`}>
+                    <div className={`reading-icon ${reading.addedBy}`}>
+                      {reading.addedBy === 'player1' ? '❤️' : '💙'}
+                    </div>
+                    <div className="reading-content">
+                      <div className="reading-title">{reading.title}</div>
+                      {reading.url && (
+                        <a href={reading.url} target="_blank" rel="noopener noreferrer" className="reading-link">
+                          <ExternalLink size={12} />
+                          Open Link
+                        </a>
+                      )}
+                    </div>
+                    <div className="reading-actions">
+                      <button
+                        className={`toggle-complete ${reading.completed ? 'completed' : ''}`}
+                        onClick={() => toggleReading(reading.id, reading.completed)}
+                        title={reading.completed ? 'Mark incomplete' : 'Mark complete'}
+                      >
+                        <CheckCircle size={20} />
+                      </button>
+                      <button
+                        className="delete-btn"
+                        onClick={() => deleteReading(reading.id)}
+                        title="Delete"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+                {/* ==================== STATS TAB ==================== */}
+                {activeTab === 'stats' && (
+          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+            <h2>
+              <Trophy size={20} />
+              Stats & Badges
+            </h2>
+
+            {/* Streak Display */}
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div className={`streak-badge ${streak.status}`}>
+                <span className="streak-icon">{streak.status === 'fire' ? '🔥' : '❄️'}</span>
+                <span>{streak.count > 0 ? `${streak.count} Day Streak!` : 'Start your streak today!'}</span>
+              </div>
+            </div>
+
+            {/* Level Progress */}
+            <div className="stats-card" style={{ marginBottom: 20 }}>
+              <h3>
+                <Star size={16} />
+                Level Progress
+              </h3>
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <div style={{ fontSize: 48, marginBottom: 8 }}>⭐</div>
+                <div
+                  style={{
+                    fontSize: 32,
+                    fontWeight: 800,
+                    color: 'var(--accent-gold)',
+                    marginBottom: 4,
+                  }}
+                >
+                  Level {levelData.level}
+                </div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    color: 'var(--text-secondary)',
+                    marginBottom: 16,
+                  }}
+                >
+                  {getLevelTitle(levelData.level)}
+                </div>
+                <div className="xp-bar-wrapper" style={{ marginBottom: 8 }}>
+                  <div className="xp-bar-glow" style={{ width: `${levelData.progress}%` }}></div>
+                  <div className="xp-bar-fill" style={{ width: `${levelData.progress}%` }}></div>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  {levelData.currentXP} / {levelData.xpForNext} XP to next level
+                </div>
+              </div>
+            </div>
+
+            {/* Badges Grid */}
+            <h3>
+              <Award size={16} />
+              Badges Earned ({badges.length})
+            </h3>
+
+            {badges.length === 0 ? (
+              <div className="badges-empty">
+                <div className="badges-empty-icon">🏅</div>
+                <div className="badges-empty-text">
+                  Keep grinding to earn badges!
+                  <br />
+                  Complete workouts, studies, and maintain streaks.
+                </div>
+              </div>
+            ) : (
+              <div className="badges-grid">
+                {badges.map((badge, idx) => (
+                  <div key={idx} className="badge-card">
+                    <span className="badge-icon">{badge.icon}</span>
+                    <div className="badge-name">{badge.name}</div>
+                    <div className="badge-desc">{badge.desc}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Personal Stats */}
+            <div className="section-divider"></div>
+            <div className="stats-card">
+              <h3>
+                <TrendingUp size={16} />
+                Your Stats
+              </h3>
+              <div className="stats-list">
+                <div className="stat-row">
+                  <div className="stat-label">
+                    <div className="stat-label-icon">⚡</div>
+                    Total XP
+                  </div>
+                  <div className="stat-value highlight">{totalXP}</div>
+                </div>
+                <div className="stat-row">
+                  <div className="stat-label">
+                    <div className="stat-label-icon">📅</div>
+                    Today's XP
+                  </div>
+                  <div className="stat-value green">{myScore}</div>
+                </div>
+                <div className="stat-row">
+                  <div className="stat-label">
+                    <div className="stat-label-icon">✅</div>
+                    Total Check-ins
+                  </div>
+                  <div className="stat-value">{checkins.filter((c) => c.userId === currentPlayer).length}</div>
+                </div>
+                <div className="stat-row">
+                  <div className="stat-label">
+                    <div className="stat-label-icon">🎯</div>
+                    Total Actions
+                  </div>
+                  <div className="stat-value">{actions.filter((a) => a.userId === currentPlayer).length}</div>
+                </div>
+                <div className="stat-row">
+                  <div className="stat-label">
+                    <div className="stat-label-icon">💪</div>
+                    Workouts
+                  </div>
+                  <div className="stat-value">
+                    {actions.filter((a) => a.userId === currentPlayer && a.type === 'workout').length}
+                  </div>
+                </div>
+                <div className="stat-row">
+                  <div className="stat-label">
+                    <div className="stat-label-icon">📖</div>
+                    Study Sessions
+                  </div>
+                  <div className="stat-value">
+                    {actions.filter((a) => a.userId === currentPlayer && a.type === 'study').length}
+                  </div>
+                </div>
+                <div className="stat-row">
+                  <div className="stat-label">
+                    <div className="stat-label-icon">📚</div>
+                    Resources Shared
+                  </div>
+                  <div className="stat-value">{readings.filter((r) => r.addedBy === currentPlayer).length}</div>
+                </div>
+                <div className="stat-row">
+                  <div className="stat-label">
+                    <div className="stat-label-icon">🔥</div>
+                    Current Streak
+                  </div>
+                  <div className="stat-value" style={{ color: 'var(--accent-orange)' }}>
+                    {streak.count} days
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Team Stats - Only in Multiplayer */}
+            {gameMode === 'multiplayer' && (
+              <>
+                <div className="section-divider"></div>
+                <div className="stats-card">
+                  <h3>
+                    <Heart size={16} />
+                    Team Stats
+                  </h3>
+                  <div className="stats-list">
+                    <div className="stat-row">
+                      <div className="stat-label">
+                        <div className="stat-label-icon">🏆</div>
+                        Today's Team Score
+                      </div>
+                      <div className="stat-value highlight">{teamScore}</div>
+                    </div>
+                    <div className="stat-row">
+                      <div className="stat-label">
+                        <div className="stat-label-icon">❤️</div>
+                        Player 1 Today
+                      </div>
+                      <div className="stat-value pink">{getPlayerDailyScore('player1', today)}</div>
+                    </div>
+                    <div className="stat-row">
+                      <div className="stat-label">
+                        <div className="stat-label-icon">💙</div>
+                        Player 2 Today
+                      </div>
+                      <div className="stat-value blue">{getPlayerDailyScore('player2', today)}</div>
+                    </div>
+                    <div className="stat-row">
+                      <div className="stat-label">
+                        <div className="stat-label-icon">⚡</div>
+                        Player 1 Total XP
+                      </div>
+                      <div className="stat-value pink">{getTotalXP('player1')}</div>
+                    </div>
+                    <div className="stat-row">
+                      <div className="stat-label">
+                        <div className="stat-label-icon">⚡</div>
+                        Player 2 Total XP
+                      </div>
+                      <div className="stat-value blue">{getTotalXP('player2')}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Versus Display */}
+                <div className="section-divider"></div>
+                <h3 style={{ textAlign: 'center' }}>Today's Battle</h3>
+                <div className="versus-display">
+                  <div className="versus-player player1">
+                    <div className="versus-avatar">❤️</div>
+                    <div className="versus-name">Player 1</div>
+                    <div className="versus-score">{getPlayerDailyScore('player1', today)}</div>
+                  </div>
+                  <div className="versus-vs">VS</div>
+                  <div className="versus-player player2">
+                    <div className="versus-avatar">💙</div>
+                    <div className="versus-name">Player 2</div>
+                    <div className="versus-score">{getPlayerDailyScore('player2', today)}</div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        <footer>
+          <div className="footer-text">
+            Building our future together
+            <span className="footer-heart">💚</span>
+            one step at a time
+          </div>
+        </footer>
+      </div>
+    </>
   );
 };
 
