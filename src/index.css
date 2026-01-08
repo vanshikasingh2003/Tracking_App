@@ -1,255 +1,283 @@
-/* =========================
-   🎮 MINECRAFT UI BASE
-   Mobile-first (iPhone)
-========================= */
-
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
 
 :root {
-  /* 🎨 Minecraft Color Palette */
-  --mc-green: #5cb85c;
-  --mc-dark-green: #3d7a3d;
-  --mc-brown: #8b5a2b;
-  --mc-stone: #6b6b6b;
-  --mc-dark: #2b2b2b;
-  --mc-gold: #f5c542;
-  --mc-diamond: #4ef2e7;
-  --mc-red: #d9534f;
-
-  font-family: 'Press Start 2P', system-ui, sans-serif;
-  line-height: 1.7;
-  font-weight: 400;
-
-  color-scheme: dark;
-  color: #ffffff;
-  background: linear-gradient(
-    180deg,
-    #2e7d32,
-    #1b5e20
-  );
-
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
+  --bg-color: #1e1e1e;
+  --panel-bg: rgba(255, 255, 255, 0.05);
+  --panel-blur: 20px;
+  --text-primary: #eee;
+  --text-secondary: #bbb;
+  --text-accent: #ffd700;
+  --button-bg: rgba(255, 255, 255, 0.1);
+  --button-hover-bg: rgba(255, 255, 255, 0.18);
+  --shadow-light: rgba(255, 255, 255, 0.2);
+  --shadow-dark: rgba(0, 0, 0, 0.8);
 }
 
-/* =========================
-   📱 Body & Layout
-========================= */
+* {
+  box-sizing: border-box;
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-
-  display: block; /* ❗ remove center forcing */
-  background: transparent;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-color);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-user-select: none;
+  user-select: none;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
 }
 
-/* =========================
-   🧱 Minecraft Block Style
-========================= */
-
-.mc-block {
-  border: 4px solid #000;
-  border-radius: 6px;
-  background: linear-gradient(
-    180deg,
-    rgba(255,255,255,0.15),
-    rgba(0,0,0,0.2)
-  );
+.glass-card {
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  border-radius: 20px;
   box-shadow:
-    inset -3px -3px 0 rgba(0,0,0,0.4),
-    inset 3px 3px 0 rgba(255,255,255,0.25);
-}
-.mc-hero {
-  background: linear-gradient(180deg, #2e7d32, #1b5e20);
-  border: 4px solid #000;
-}
-
-.mc-action {
-  background: var(--mc-green);
+    3px 3px 10px var(--shadow-dark),
+    -5px -5px 15px var(--shadow-light);
+  padding: 24px;
+  max-width: 480px;
+  margin: auto;
+  text-align: left;
 }
 
-.mc-muted {
-  background: #3f6f3f;
+header, footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+  margin-bottom: 16px;
 }
-
-
-/* =========================
-   ✍️ Typography
-========================= */
 
 h1, h2, h3 {
-  font-family: 'Press Start 2P';
-  margin: 0.5em 0;
+  margin: 0 0 10px 0;
+  color: var(--text-primary);
 }
 
 h1 {
-  font-size: 16px;
+  font-weight: 600;
+  font-size: 24px;
 }
 
 h2 {
-  font-size: 13px;
+  font-weight: 600;
+  font-size: 20px;
 }
 
-p {
-  font-size: 11px;
-  line-height: 1.8;
+h3 {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-secondary);
 }
 
-/* =========================
-   🧾 Inputs (iPhone friendly)
-========================= */
+/* Buttons */
+.btn {
+  background: var(--button-bg);
+  border: none;
+  border-radius: 15px;
+  padding: 14px 24px;
+  font-size: 15px;
+  color: var(--text-primary);
+  cursor: pointer;
+  box-shadow:
+    inset 4px 4px 8px var(--shadow-dark),
+    inset -4px -4px 8px var(--shadow-light);
+  user-select: none;
+}
 
-input,
-textarea,
-select {
+.btn:hover {
+  background: var(--button-hover-bg);
+  box-shadow:
+    6px 6px 16px var(--shadow-dark),
+    -6px -6px 16px var(--shadow-light);
+  color: var(--text-accent);
+  transition: all 0.25s ease;
+}
+
+.btn:disabled {
+  color: #555;
+  background: var(--button-bg);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Inputs and TextAreas */
+input, textarea, select {
   width: 100%;
-  font-family: inherit;
-  font-size: 16px; /* iOS magic number (prevents zoom) */
-  padding: 14px;
-  text-align: center;
-
-  color: white;
-  background: var(--mc-dark);
-
-  border: 4px solid #000;
-  border-radius: 6px;
-}
-
-textarea {
-  min-height: 120px;
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: 15px;
+  border: none;
+  background: var(--button-bg);
+  color: var(--text-primary);
+  box-shadow:
+    inset 4px 4px 8px var(--shadow-dark),
+    inset -4px -4px 8px var(--shadow-light);
+  transition: box-shadow 0.3s ease;
   resize: none;
 }
 
-/* =========================
-   🔽 Dropdowns
-========================= */
-
-select {
-  background: var(--mc-stone);
-  text-align-last: center;
-}
-
-/* =========================
-   🎮 Buttons
-========================= */
-
-button {
-  width: 100%;
-  padding: 16px;
-
-  font-family: 'Press Start 2P';
-  font-size: 11px;
-
-  color: white;
-  background: var(--mc-green);
-
-  border: 4px solid #000;
-  border-radius: 6px;
-
-  cursor: pointer;
-  transition: transform 0.1s, background-color 0.1s;
-}
-
-button:active {
-  transform: translateY(3px);
-  background: var(--mc-dark-green);
-}
-
-button:focus {
+input:focus, textarea:focus, select:focus {
   outline: none;
+  box-shadow:
+    inset 6px 6px 12px var(--shadow-dark),
+    inset -6px -6px 12px var(--shadow-light);
 }
 
-/* =========================
-   ✨ Animations
-========================= */
-
-.pop-in {
-  animation: popIn 0.25s ease-out;
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--text-secondary);
+  border-radius: 20px;
 }
 
-@keyframes popIn {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
+/* Lists */
+ul {
+  padding-left: 20px;
+  list-style: none;
 }
 
-/* =========================
-   📱 Safe Area (iPhone)
-========================= */
-
-.safe-area {
-  padding-bottom: env(safe-area-inset-bottom);
+ul li::before {
+  content: '•';
+  color: var(--text-accent);
+  display: inline-block; 
+  width: 1em;
+  margin-left: -1em;
 }
 
-/* Loading dots animation */
-.loading-dots::after {
-  content: "";
-  animation: dots 1.5s steps(4, end) infinite;
+/* Icons Container */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-accent);
+  font-size: 18px;
 }
 
-@keyframes dots {
-  0%   { content: ""; }
-  25%  { content: "."; }
-  50%  { content: ".."; }
-  75%  { content: "..."; }
-  100% { content: ""; }
+/* Tabs Navigation */
+.tabs {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 24px;
 }
 
+.tabs button {
+  flex: 1;
+  border-radius: 15px;
+  background: var(--button-bg);
+  border: none;
+  padding: 14px 0;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  box-shadow:
+    4px 4px 8px var(--shadow-dark),
+    -4px -4px 8px var(--shadow-light);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
 
-@keyframes bob {
+.tabs button.active {
+  background: var(--text-accent);
+  color: var(--bg-color);
+  box-shadow:
+    inset 4px 4px 12px var(--shadow-dark),
+    inset -4px -4px 12px var(--shadow-light);
+}
+
+/* Cards List */
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+/* Single Card */
+.card {
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  border-radius: 18px;
+  padding: 16px 20px;
+  box-shadow:
+    3px 3px 15px var(--shadow-dark),
+    -3px -3px 15px var(--shadow-light);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-primary);
+}
+
+.card .description {
+  flex-direction: column;
+  text-align: left;
+  margin-left: 12px;
+  flex: 1;
+}
+
+.card .description p {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.card .description small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* Loading Screen */
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-color);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 9999;
+}
+
+@keyframes pulse {
   0% {
-    transform: translateY(0) scale(1.15);
+    opacity: 0.6;
   }
   50% {
-    transform: translateY(-8px) scale(2.0);
+    opacity: 1;
   }
   100% {
-    transform: translateY(0) scale(1.15);
+    opacity: 0.6;
   }
 }
 
-.bob {
-  animation: bob 1.3s ease-in-out infinite;
+.loading-icon {
+  font-size: 48px;
+  color: var(--text-primary);
+  animation: pulse 1.2s infinite ease-in-out;
 }
 
-/* =========================
-   🃏 Minecraft Card Button
-========================= */
-
-.mc-card {
-  border: 4px solid #000;
-  border-radius: 10px;
-
-  background: linear-gradient(
-    180deg,
-    rgba(255,255,255,0.18),
-    rgba(0,0,0,0.25)
-  );
-
-  box-shadow:
-    inset -3px -3px 0 rgba(0,0,0,0.45),
-    inset 3px 3px 0 rgba(255,255,255,0.3);
-
-  padding: 18px 16px;
-  text-align: center;
-
-  max-width: 85%;
-  margin: 0 auto;
-
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-
-.mc-card:active {
-  transform: translateY(3px);
-  box-shadow:
-    inset 2px 2px 0 rgba(0,0,0,0.5);
+/* Responsive */
+@media (max-width: 480px) {
+  .glass-card {
+    max-width: 100%;
+    padding: 16px;
+  }
 }

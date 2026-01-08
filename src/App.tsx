@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   getFirestore,
@@ -11,6 +11,7 @@ import {
   orderBy,
   deleteDoc,
 } from 'firebase/firestore';
+
 import {
   Heart,
   Book,
@@ -23,9 +24,15 @@ import {
   Users,
   Lock,
   Unlock,
+  Activity,
+  User,
+  ArrowLeft,
+  Settings,
+  Loader2,
+  PauseCircle,
 } from 'lucide-react';
 
-// Firebase configuration
+// Firebase configuration (same as before)
 const firebaseConfig = {
   apiKey: 'AIzaSyCX4myq_aSMqQ19Ae59qcBbvUTF6a7dx6E',
   authDomain: 'our-adventure-log.firebaseapp.com',
@@ -39,17 +46,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ═══════════════════════════════════════════════════════════
-// FIRESTORE SCHEMA (Extended from existing)
-// ═══════════════════════════════════════════════════════════
-// checkins: { userId, text, timestamp, date, hasActions }
-// actions: { userId, date, type, points, timestamp, description }
-// readings: { addedBy, title, url, completed, timestamp }
-// achievements: { user, type, value, timestamp, date } [LEGACY - kept for compatibility]
-
-// ═══════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════
 type Player = 'player1' | 'player2';
 type GameMode = 'singleplayer' | 'multiplayer' | 'pvp' | null;
 
@@ -81,16 +77,10 @@ interface Reading {
   timestamp: number;
 }
 
-const MinecraftGoalsApp = () => {
-  // ═══════════════════════════════════════════════════════════
-  // STEP 1: USER IDENTITY STATE
-  // ═══════════════════════════════════════════════════════════
+const ModernGoalsApp: React.FC = () => {
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
   const [playerSelected, setPlayerSelected] = useState(false);
 
-  // ═══════════════════════════════════════════════════════════
-  // EXISTING STATE (preserved)
-  // ═══════════════════════════════════════════════════════════
   const [activeTab, setActiveTab] = useState('checkin');
   const [checkins, setCheckins] = useState<CheckIn[]>([]);
   const [readings, setReadings] = useState<Reading[]>([]);
@@ -98,26 +88,16 @@ const MinecraftGoalsApp = () => {
   const [loading, setLoading] = useState(true);
   const [gameMode, setGameMode] = useState<GameMode>(null);
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 3: ACTION SYSTEM STATE
-  // ═══════════════════════════════════════════════════════════
   const [actions, setActions] = useState<Action[]>([]);
   const [selectedActionType, setSelectedActionType] = useState('workout');
   const [actionDescription, setActionDescription] = useState('');
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 2: CHECK-IN STATE
-  // ═══════════════════════════════════════════════════════════
   const [checkinText, setCheckinText] = useState('');
   const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
 
-  // Existing form states
   const [readingTitle, setReadingTitle] = useState('');
   const [readingUrl, setReadingUrl] = useState('');
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 1: LOAD PLAYER FROM LOCALSTORAGE
-  // ═══════════════════════════════════════════════════════════
   useEffect(() => {
     const saved = localStorage.getItem('currentPlayer');
     if (saved === 'player1' || saved === 'player2') {
@@ -126,14 +106,8 @@ const MinecraftGoalsApp = () => {
     }
   }, []);
 
-  // ═══════════════════════════════════════════════════════════
-  // HELPER: Get today's date string
-  // ═══════════════════════════════════════════════════════════
   const getTodayDate = () => new Date().toLocaleDateString();
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 2: CHECK IF PLAYER HAS CHECKED IN TODAY
-  // ═══════════════════════════════════════════════════════════
   useEffect(() => {
     if (!currentPlayer) return;
     const today = getTodayDate();
@@ -143,9 +117,6 @@ const MinecraftGoalsApp = () => {
     setHasCheckedInToday(checkedIn);
   }, [checkins, currentPlayer]);
 
-  // ═══════════════════════════════════════════════════════════
-  // REAL-TIME LISTENERS (Extended with actions collection)
-  // ═══════════════════════════════════════════════════════════
   useEffect(() => {
     const checkinsQuery = query(
       collection(db, 'checkins'),
@@ -199,9 +170,6 @@ const MinecraftGoalsApp = () => {
     };
   }, []);
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 1: PLAYER SELECTION HANDLERS
-  // ═══════════════════════════════════════════════════════════
   const selectPlayer = (player: Player) => {
     setCurrentPlayer(player);
     localStorage.setItem('currentPlayer', player);
@@ -215,12 +183,9 @@ const MinecraftGoalsApp = () => {
     localStorage.removeItem('currentPlayer');
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 2: MANDATORY CHECK-IN HANDLER
-  // ═══════════════════════════════════════════════════════════
   const addCheckin = async () => {
     if (!checkinText.trim() || !currentPlayer) return;
-    
+
     await addDoc(collection(db, 'checkins'), {
       userId: currentPlayer,
       text: checkinText,
@@ -228,22 +193,16 @@ const MinecraftGoalsApp = () => {
       date: getTodayDate(),
       hasActions: false,
     });
-    
+
     setCheckinText('');
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 3: ACTION SYSTEM - SCORING LOGIC
-  // ═══════════════════════════════════════════════════════════
   const getActionPoints = (type: string, isFirstAction: boolean): number => {
     if (isFirstAction) return 20;
     if (type === 'workout' || type === 'study') return 30;
     return 10;
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 3: ADD ACTION HANDLER
-  // ═══════════════════════════════════════════════════════════
   const addAction = async () => {
     if (!actionDescription.trim() || !currentPlayer || !hasCheckedInToday) return;
 
@@ -275,9 +234,6 @@ const MinecraftGoalsApp = () => {
     setActionDescription('');
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 4: MULTIPLAYER SCORING LOGIC
-  // ═══════════════════════════════════════════════════════════
   const getPlayerDailyScore = (player: Player, date: string): number => {
     const checkedIn = checkins.some((c) => c.userId === player && c.date === date);
     if (!checkedIn) return 0;
@@ -298,9 +254,6 @@ const MinecraftGoalsApp = () => {
     return Math.min(p1Score, p2Score) * 2;
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // EXISTING HELPER FUNCTIONS (Preserved)
-  // ═══════════════════════════════════════════════════════════
   const addReading = async () => {
     if (!readingTitle.trim() || !currentPlayer) return;
     await addDoc(collection(db, 'readings'), {
@@ -326,16 +279,16 @@ const MinecraftGoalsApp = () => {
     if (!currentPlayer) return '❄️ Select player';
     const today = getTodayDate();
     const yesterday = new Date(Date.now() - 86400000).toLocaleDateString();
-    
+
     const hasToday = checkins.some((c) => c.userId === currentPlayer && c.date === today);
     const hasYesterday = checkins.some((c) => c.userId === currentPlayer && c.date === yesterday);
-    
+
     return hasToday && hasYesterday ? '🔥 2+ days' : hasToday ? '🔥 1 day' : '❄️ Start today!';
   };
 
   const getBadges = () => {
     if (!currentPlayer) return [];
-    
+
     const workoutCount = actions.filter((a) => a.userId === currentPlayer && a.type === 'workout').length;
     const studyCount = actions.filter((a) => a.userId === currentPlayer && a.type === 'study').length;
 
@@ -344,7 +297,7 @@ const MinecraftGoalsApp = () => {
     if (workoutCount >= 15) badges.push({ icon: '⛏️', name: 'Diamond Pick', desc: '15+ workouts' });
     if (studyCount >= 10) badges.push({ icon: '📚', name: 'Bookworm', desc: '10+ study hours' });
     if (studyCount >= 25) badges.push({ icon: '💎', name: 'Study Diamond', desc: '25+ study hours' });
-    
+
     const playerCheckins = checkins.filter((c) => c.userId === currentPlayer);
     if (playerCheckins.length >= 7) badges.push({ icon: '🏆', name: 'Weekly Warrior', desc: '7+ check-ins' });
 
@@ -353,198 +306,68 @@ const MinecraftGoalsApp = () => {
 
   const getAchievementIcon = (type: string) => {
     switch (type) {
-      case 'workout': return <Dumbbell className="w-4 h-4" />;
-      case 'study': return <Clock className="w-4 h-4" />;
-      case 'reading': return <Book className="w-4 h-4" />;
-      case 'work': return <Award className="w-4 h-4" />;
-      case 'relationship': return <Heart className="w-4 h-4" />;
-      default: return <Award className="w-4 h-4" />;
+      case 'workout': return <Dumbbell size={18} color="#FFD700" />;
+      case 'study': return <Clock size={18} color="#FFD700" />;
+      case 'reading': return <Book size={18} color="#FFD700" />;
+      case 'work': return <Award size={18} color="#FFD700" />;
+      case 'relationship': return <Heart size={18} color="#FFD700" />;
+      default: return <Award size={18} color="#FFD700" />;
     }
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // LOADING SCREEN (Preserved)
-  // ═══════════════════════════════════════════════════════════
   if (loading) {
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'linear-gradient(to bottom, #14532d, #052e16)', zIndex: 9999 }}>
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-          <div className="text-7xl mb-4 bob">⛏️</div>
-          <div style={{ fontFamily: "'Press Start 2P', cursive", fontSize: '20px', color: 'white', marginBottom: '12px' }}>
-            Loading Our World
-          </div>
-          <div style={{ fontFamily: "'Press Start 2P', cursive", fontSize: '12px', color: 'rgba(255,255,255,0.8)' }} className="loading-dots">
-            Generating terrain
-          </div>
+      <div className="loading-screen" aria-label="Loading">
+        <Loader2 className="loading-icon" />
+        <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '8px' }}>
+          Loading Our World...
         </div>
       </div>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // STEP 1: PLAYER SELECTION SCREEN
-  // ═══════════════════════════════════════════════════════════
   if (!playerSelected || !currentPlayer) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex items-center justify-center p-4">
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-          .pixel-font { font-family: 'Press Start 2P', cursive; }
-          .minecraft-border {
-            border: 4px solid #000;
-            box-shadow: inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.3);
-          }
-          .player-btn {
-            border: 4px solid #000;
-            box-shadow: inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.3);
-            transition: all 0.15s;
-          }
-          .player-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: inset -3px -3px 0 rgba(0,0,0,0.6), inset 3px 3px 0 rgba(255,255,255,0.4);
-          }
-          .player-btn:active {
-            transform: translateY(2px);
-            box-shadow: inset 2px 2px 0 rgba(0,0,0,0.5);
-          }
-        `}</style>
-
-        <div className="max-w-md w-full">
-          <div className="minecraft-border bg-amber-800 p-6 mb-8">
-            <h1 className="pixel-font text-2xl text-white text-center mb-3">
-              Select Your Player
-            </h1>
-            <p className="pixel-font text-xs text-amber-200 text-center">
-              Who are you?
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-  <button
-    onClick={() => selectPlayer('player1')}
-    className="mc-card bg-pink-600 text-white pixel-font text-xs"
-  >
-    <div className="text-4xl mb-2">❤️</div>
-    <div>Player 1</div>
-    <div className="opacity-80 text-[10px] mt-1">(You)</div>
-  </button>
-
-  <button
-    onClick={() => selectPlayer('player2')}
-    className="mc-card bg-blue-600 text-white pixel-font text-xs"
-  >
-    <div className="text-4xl mb-2">💙</div>
-    <div>Player 2</div>
-    <div className="opacity-80 text-[10px] mt-1">(Baby)</div>
-  </button>
-</div>
-
-
-          <div className="mt-8 text-center">
-            <p className="pixel-font text-xs text-green-300">Version 2025.1</p>
-          </div>
+      <div className="glass-card" style={{ maxWidth: 400, marginTop: 48 }}>
+        <header>
+          <h1>Select Your Player</h1>
+        </header>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: 24 }}>
+          Who are you?
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-around', gap: '12px' }}>
+          <button className="btn" onClick={() => selectPlayer('player1')} aria-label="Select Player 1">
+            <div style={{ fontSize: 32 }}>❤️</div>
+            Player 1
+          </button>
+          <button className="btn" onClick={() => selectPlayer('player2')} aria-label="Select Player 2">
+            <div style={{ fontSize: 32 }}>💙</div>
+            Player 2
+          </button>
         </div>
       </div>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // GAME MODE SELECTION (Preserved)
-  // ═══════════════════════════════════════════════════════════
   if (!gameMode) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex items-center justify-center p-4">
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-          .pixel-font { font-family: 'Press Start 2P', cursive; }
-          .minecraft-border {
-            border: 4px solid #000;
-            box-shadow: inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.3);
-          }
-          .mode-btn {
-            border: 4px solid #000;
-            box-shadow: inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.3);
-            transition: all 0.15s;
-          }
-          .mode-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: inset -3px -3px 0 rgba(0,0,0,0.6), inset 3px 3px 0 rgba(255,255,255,0.4);
-          }
-          .mode-btn:active {
-            transform: translateY(2px);
-            box-shadow: inset 2px 2px 0 rgba(0,0,0,0.5);
-          }
-        `}</style>
-
-        <div className="max-w-md w-full">
-          <div className="minecraft-border bg-amber-800 p-6 mb-8">
-            <h1 className="pixel-font text-2xl text-white text-center mb-3">
-              Our Adventure Log
-            </h1>
-            <p className="pixel-font text-xs text-amber-200 text-center">
-              Select Game Mode
-            </p>
-            <div className="text-center mt-3 pixel-font text-xs text-white">
-              Playing as: {currentPlayer === 'player1' ? '❤️ You' : '💙 Baby'}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-
-
-  {/* Game modes */}
-  <button
-    onClick={() => setGameMode('singleplayer')}
-    className="mc-card bg-green-600 text-white pixel-font text-xs"
-  >
-    <div className="text-base mb-1">🧍 Solo Mode</div>
-    <div className="opacity-80 text-[10px]">
-      Focus on your own growth
-    </div>
-  </button>
-
-  <button
-    onClick={() => setGameMode('multiplayer')}
-    className="mc-card bg-blue-600 text-white pixel-font text-xs"
-  >
-    <div className="text-lg mb-1">👥 Team Mode</div>
-    <div className="opacity-80 text-[10px]">
-      Both must check in & act
-    </div>
-  </button>
-
-  <button
-    disabled
-    className="mc-card bg-red-600 text-white pixel-font text-xs opacity-60"
-  >
-    <div className="text-lg mb-1">⚔️ PVP Mode</div>
-    <div className="opacity-80 text-[10px]">
-      Coming soon
-    </div>
-  </button>
-
-
-
-  {/* Switch player (secondary action) */}
-  <button
-    onClick={switchPlayer}
-    className="mc-card bg-gray-600 text-white pixel-font text-[10px]"
-  >
-    🔄 Switch Player
-  </button>
-</div>
-
-          <div className="mt-8 text-center">
-            <p className="pixel-font text-xs text-green-300">Version 2025.1</p>
-          </div>
+      <div className="glass-card" style={{ maxWidth: 400, marginTop: 48 }}>
+        <header>
+          <h1>Our Adventure Log</h1>
+          <button className="btn" onClick={switchPlayer}>Switch Player</button>
+        </header>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: 24 }}>
+          Playing as: {currentPlayer === 'player1' ? '❤️ You' : '💙 Baby'}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <button className="btn" onClick={() => setGameMode('singleplayer')}>Solo Mode 🧍</button>
+          <button className="btn" onClick={() => setGameMode('multiplayer')}>Team Mode 👥</button>
+          <button className="btn" disabled style={{ cursor: 'not-allowed', opacity: 0.5 }}>PVP Mode ⚔️ (Coming Soon)</button>
         </div>
       </div>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // MAIN APP UI
-  // ═══════════════════════════════════════════════════════════
   const today = getTodayDate();
   const todayActions = actions.filter((a) => a.userId === currentPlayer && a.date === today);
   const myScore = getPlayerDailyScore(currentPlayer, today);
@@ -553,202 +376,148 @@ const MinecraftGoalsApp = () => {
   const teamScore = getTeamScore(today);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 p-4">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-        .pixel-font { font-family: 'Press Start 2P', cursive; }
-        .minecraft-border { 
-          border: 4px solid #000; 
-          box-shadow: inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.3);
-        }
-        .minecraft-btn {
-          border: 3px solid #000;
-          box-shadow: inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.3);
-          transition: all 0.1s;
-        }
-        .minecraft-btn:active {
-          box-shadow: inset 2px 2px 0 rgba(0,0,0,0.5);
-        }
-        .minecraft-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-      `}</style>
+    <div className="glass-card" style={{ maxWidth: 480, margin: '24px auto' }}>
+      <header>
+        <button className="btn" onClick={() => setGameMode(null)} aria-label="Back">
+          <ArrowLeft size={24} />
+        </button>
+        <h1 style={{ flexGrow: 1, textAlign: 'center' }}>
+          {gameMode === 'multiplayer' ? 'Team Mode' : gameMode === 'pvp' ? 'PVP Mode' : 'Solo Mode'}
+        </h1>
+        <button className="btn" onClick={switchPlayer} aria-label="Switch Player">
+          <User size={24} />
+        </button>
+      </header>
 
-      {/* Header */}
-      <div className="max-w-4xl mx-auto mb-6">
-        <div className="minecraft-border bg-amber-800 p-4 mb-4">
-          <div className="flex items-start justify-between mb-2">
-            <button
-              onClick={() => setGameMode(null)}
-              className="minecraft-btn bg-red-600 hover:bg-red-500 text-white px-3 py-1 pixel-font text-xs"
-            >
-              ← Back
-            </button>
-            <button
-              onClick={switchPlayer}
-              className="minecraft-btn bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 pixel-font text-xs"
-            >
-              Switch
-            </button>
-          </div>
-          <h1 className="pixel-font text-xl text-white text-center mb-2">
-            🎮 {gameMode === 'multiplayer' ? 'Team Mode' : gameMode === 'pvp' ? 'PVP Mode' : 'Solo Mode'} 🎮
-          </h1>
-          <div className="text-center mb-2">
-            <span className="pixel-font text-sm text-white">
-              {currentPlayer === 'player1' ? '❤️ You' : '💙 Baby'}
-            </span>
-          </div>
-
-          {/* STEP 4: Multiplayer Team Scores */}
-          {gameMode === 'multiplayer' && (
-            <div className="minecraft-border bg-stone-800 p-3 mt-3">
-              <div className="pixel-font text-xs text-amber-400 text-center mb-2">Today's Scores</div>
-              <div className="flex justify-around items-center text-white text-sm mb-2">
-                <div>
-                  <div className="pixel-font text-xs text-pink-400">❤️ You</div>
-                  <div className="text-center font-bold">{myScore} pts</div>
-                </div>
-                <div>
-                  <div className="pixel-font text-xs text-blue-400">💙 Baby</div>
-                  <div className="text-center font-bold">{otherScore} pts</div>
-                </div>
+      {/* Scores */}
+      {gameMode === 'multiplayer' && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: 6, color: 'var(--text-accent)' }}>
+              Today's Scores
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: '12px' }}>
+              <div>
+                <div style={{ color: '#FFD6D6', fontWeight: 600, marginBottom: 4 }}>❤️ You</div>
+                <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{myScore} pts</div>
               </div>
-              <div className="minecraft-border bg-amber-900 p-2 text-center">
-                <div className="pixel-font text-xs text-amber-200">Team Score</div>
-                <div className="text-2xl font-bold text-white">{teamScore}</div>
-                {teamScore === 0 && (
-                  <div className="pixel-font text-xs text-red-400 mt-1">
-                    {myScore === 0 ? '⚠️ You need check-in + action' : '⏳ Waiting for partner'}
-                  </div>
-                )}
+              <div>
+                <div style={{ color: '#ADD8FF', fontWeight: 600, marginBottom: 4 }}>💙 Baby</div>
+                <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{otherScore} pts</div>
               </div>
             </div>
-          )}
-
-          {/* Singleplayer Score */}
-          {gameMode === 'singleplayer' && (
-            <div className="flex justify-center gap-4 items-center text-white text-sm mt-2">
-              <div className="pixel-font">Today: {myScore} pts</div>
-              <div className="pixel-font">Streak: {getStreak()}</div>
-            </div>
-          )}
+          </div>
+          <div style={{ marginTop: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Team Score</div>
+            <div style={{ fontSize: '30px', fontWeight: 'bold', color: 'var(--text-accent)' }}>{teamScore}</div>
+            {teamScore === 0 && (
+              <div style={{ fontSize: '13px', color: 'tomato' }}>
+                {myScore === 0 ? '⚠️ You need check-in + action' : '⏳ Waiting for partner'}
+              </div>
+            )}
+          </div>
         </div>
+      )}
 
-        {/* Tab Navigation */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          {[
-            { id: 'checkin', icon: Heart, label: 'Check-in' },
-            { id: 'actions', icon: Award, label: 'Actions' },
-            { id: 'reading', icon: Book, label: 'Reading' },
-            { id: 'badges', icon: Calendar, label: 'Stats' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`minecraft-btn p-3 flex flex-col items-center gap-1 ${
-                activeTab === tab.id ? 'bg-amber-600 text-white' : 'bg-stone-600 text-gray-300'
-              }`}
-            >
-              <tab.icon className="w-5 h-5" />
-              <span className="pixel-font text-xs">{tab.label}</span>
-            </button>
-          ))}
+      {gameMode === 'singleplayer' && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, color: 'var(--text-primary)' }}>
+          <div>Today: <strong>{myScore} pts</strong></div>
+          <div>Streak: <strong>{getStreak()}</strong></div>
         </div>
+      )}
+
+      {/* Tabs */}
+      <div className="tabs" role="tablist" aria-label="Sections Tabs">
+        {[
+          { id: 'checkin', icon: Heart, label: 'Check-in' },
+          { id: 'actions', icon: Award, label: 'Actions' },
+          { id: 'reading', icon: Book, label: 'Reading' },
+          { id: 'badges', icon: Calendar, label: 'Stats' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={activeTab === tab.id ? 'active' : ''}
+            aria-selected={activeTab === tab.id}
+            role="tab"
+            aria-controls={`${tab.id}-panel`}
+            id={`${tab.id}-tab`}
+          >
+            <tab.icon size={20} style={{ marginBottom: 2 }} /> {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Content */}
-      <div className="max-w-4xl mx-auto">
-        {/* STEP 2: CHECK-IN TAB (with mandatory check-in logic) */}
-        {activeTab === 'checkin' && (
-          <div className="minecraft-border bg-stone-700 p-4">
-            <h2 className="pixel-font text-white text-sm mb-2">
-              💬 Daily Check-in
-            </h2>
-            
-            {/* Check-in Status */}
-            <div className="minecraft-border bg-stone-800 p-3 mb-3 text-center">
-              {hasCheckedInToday ? (
-                <div className="flex items-center justify-center gap-2">
-                  <Unlock className="w-4 h-4 text-green-400" />
-                  <span className="pixel-font text-xs text-green-400">✓ Checked In</span>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2">
-                  <Lock className="w-4 h-4 text-red-400" />
-                  <span className="pixel-font text-xs text-red-400">⚠️ Check-in Required</span>
-                </div>
-              )}
-            </div>
+      {/* Content Panels */}
+      <section
+        id="checkin-panel"
+        role="tabpanel"
+        aria-labelledby="checkin-tab"
+        hidden={activeTab !== 'checkin'}
+      >
+        <h2>💬 Daily Check-in</h2>
 
-            {!hasCheckedInToday && (
-              <>
-                <textarea
-                  value={checkinText}
-                  onChange={(e) => setCheckinText(e.target.value)}
-                  placeholder="What did you do today?"
-                  className="w-full p-3 mb-3 minecraft-border bg-stone-800 text-white placeholder-gray-400"
-                  rows={3}
-                />
-                <button
-                  onClick={addCheckin}
-                  className="minecraft-btn bg-green-600 text-white px-6 py-2 pixel-font text-xs w-full"
-                  >
-                  Check In Today (+10 pts)
-                  </button>
-                  </>
-                  )}
-                  <div className="mt-4 minecraft-border bg-amber-900 p-3">
-          <div className="pixel-font text-xs text-amber-200 mb-2">⚠️ Important Rules:</div>
-          <ul className="text-xs text-white space-y-1">
-            <li>• Must check in daily</li>
-            <li>• Must log ≥1 action to score</li>
-            <li>• Both required for points</li>
-          </ul>
+        <div className={`card`} style={{ backgroundColor: hasCheckedInToday ? 'rgba(50,50,50,0.4)' : 'rgba(100,20,20,0.4)', marginBottom: '20px', justifyContent: 'center' }}>
+          {hasCheckedInToday ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#4caf50' }}>
+              <Unlock size={24} />
+              <span>✓ Checked In</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#f44336' }}>
+              <Lock size={24} />
+              <span>⚠️ Check-in Required</span>
+            </div>
+          )}
         </div>
 
-        <div className="mt-6 space-y-3">
-          <h3 className="pixel-font text-xs text-gray-400">Recent Check-ins</h3>
-          {checkins.slice(0, 5).map((checkin) => (
-            <div key={checkin.id} className="minecraft-border bg-stone-800 p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`pixel-font text-xs ${
-                  checkin.userId === 'player1' ? 'text-pink-400' : 'text-blue-400'
-                }`}>
+        {!hasCheckedInToday && (
+          <>
+            <textarea
+              value={checkinText}
+              onChange={(e) => setCheckinText(e.target.value)}
+              placeholder="What did you do today?"
+              aria-label="Check-in text"
+            />
+            <button onClick={addCheckin} className="btn">Check In Today (+10 pts)</button>
+          </>
+        )}
+
+        <div>
+          <h3>Recent Check-ins</h3>
+          <div className="card-list" aria-live="polite" aria-relevant="additions">
+            {checkins.slice(0, 5).map((checkin) => (
+              <article key={checkin.id} className="card" role="listitem" tabIndex={0}>
+                <div style={{ fontWeight: 600, color: checkin.userId === 'player1' ? '#ff6699' : '#6699ff' }}>
                   {checkin.userId === 'player1' ? '❤️ You' : '💙 Baby'}
-                </span>
-                <span className="text-gray-400 text-xs">{checkin.date}</span>
-                {checkin.hasActions && <span className="text-green-400 text-xs">✓</span>}
-              </div>
-              <p className="text-white text-sm">{checkin.text}</p>
-            </div>
-          ))}
+                </div>
+                <small>{checkin.date}</small>
+                <p>{checkin.text}</p>
+              </article>
+            ))}
+          </div>
         </div>
-      </div>
-    )}
+      </section>
 
-    {/* STEP 3: ACTIONS TAB (with scoring system) */}
-    {activeTab === 'actions' && (
-      <div className="minecraft-border bg-stone-700 p-4">
-        <h2 className="pixel-font text-white text-sm mb-2">
-          🏆 Log Actions
-        </h2>
+      <section
+        id="actions-panel"
+        role="tabpanel"
+        aria-labelledby="actions-tab"
+        hidden={activeTab !== 'actions'}
+      >
+        <h2>🏆 Log Actions</h2>
 
         {!hasCheckedInToday ? (
-          <div className="minecraft-border bg-red-900 p-4 text-center">
-            <Lock className="w-8 h-8 mx-auto mb-2 text-red-400" />
-            <p className="pixel-font text-xs text-red-200">
-              Check in first to unlock actions
-            </p>
+          <div className="card" style={{ backgroundColor: 'rgba(200, 50, 50, 0.35)', justifyContent: 'center' }}>
+            <Lock size={48} color="#f44336"/>
+            <p>Check in first to unlock actions</p>
           </div>
         ) : (
           <>
             <select
               value={selectedActionType}
               onChange={(e) => setSelectedActionType(e.target.value)}
-              className="w-full p-3 mb-2 minecraft-border bg-stone-800 text-white"
-              disabled={!hasCheckedInToday}
+              aria-label="Select action type"
             >
               <option value="workout">💪 Workout (+30 pts bonus)</option>
               <option value="study">📖 Study (+30 pts bonus)</option>
@@ -757,223 +526,185 @@ const MinecraftGoalsApp = () => {
               <option value="relationship">❤️ Relationship (+10/20 pts)</option>
               <option value="other">⭐ Other (+10/20 pts)</option>
             </select>
-
             <input
               value={actionDescription}
               onChange={(e) => setActionDescription(e.target.value)}
               placeholder="What did you do?"
-              className="w-full p-3 mb-3 minecraft-border bg-stone-800 text-white placeholder-gray-400"
-              disabled={!hasCheckedInToday}
+              aria-label="Action description"
             />
-
-            <button
-              onClick={addAction}
-              disabled={!hasCheckedInToday}
-              className="minecraft-btn bg-purple-600 text-white px-6 py-2 pixel-font text-xs w-full disabled:opacity-50"
-            >
+            <button onClick={addAction} className="btn" disabled={!hasCheckedInToday}>
               Log Action {todayActions.length === 0 ? '(+20 pts)' : '(+10-30 pts)'}
             </button>
 
-            <div className="mt-4 minecraft-border bg-amber-900 p-3">
-              <div className="pixel-font text-xs text-amber-200 mb-2">📊 Scoring:</div>
-              <ul className="text-xs text-white space-y-1">
+            <div style={{ marginTop: '16px' }}>
+              <h3>📊 Scoring:</h3>
+              <ul>
                 <li>• Check-in: +10</li>
                 <li>• First action: +20</li>
                 <li>• Extra actions: +10</li>
                 <li>• Workout/Study bonus: +30</li>
               </ul>
             </div>
+
+            <div style={{marginTop: '20px'}}>
+              <h3>Today's Actions ({todayActions.length})</h3>
+              <div className="card-list">
+                {todayActions.map((action) => (
+                  <article key={action.id} className="card" role="listitem">
+                    <span>{getAchievementIcon(action.type)}</span>
+                    <div className="description">
+                      <p>{action.description}</p>
+                      <small>{action.type}</small>
+                    </div>
+                    <div style={{ color: '#4caf50' }}>+{action.points}</div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div style={{marginTop: '20px'}}>
+              <h3>Recent Actions</h3>
+              <div className="card-list" style={{maxHeight: '220px'}}>
+                {actions.filter(a => a.date !== today).slice(0, 5).map((action) => (
+                  <article key={action.id} className="card" role="listitem">
+                    <span style={{color: action.userId === 'player1' ? '#ff6699' : '#6699ff'}}>
+                      {getAchievementIcon(action.type)}
+                    </span>
+                    <div className="description">
+                      <p>{action.description}</p>
+                      <small>{action.date}</small>
+                    </div>
+                    <span style={{ color: action.userId === 'player1' ? '#ff6699' : '#6699ff' }}>
+                      {action.userId === 'player1' ? '❤️' : '💙'}
+                    </span>
+                  </article>
+                ))}
+              </div>
+            </div>
           </>
         )}
+      </section>
 
-        <div className="mt-6 space-y-2">
-          <h3 className="pixel-font text-xs text-gray-400">Today's Actions ({todayActions.length})</h3>
-          {todayActions.map((action) => (
-            <div key={action.id} className="minecraft-border bg-stone-800 p-3 flex items-center gap-3">
-              <div className={action.userId === 'player1' ? 'text-pink-400' : 'text-blue-400'}>
-                {getAchievementIcon(action.type)}
-              </div>
-              <div className="flex-1">
-                <p className="text-white text-sm">{action.description}</p>
-                <p className="text-gray-400 text-xs">{action.type}</p>
-              </div>
-              <span className="pixel-font text-xs text-green-400">+{action.points}</span>
-            </div>
-          ))}
-
-          <h3 className="pixel-font text-xs text-gray-400 mt-6">Recent Actions</h3>
-          {actions.filter(a => a.date !== today).slice(0, 5).map((action) => (
-            <div key={action.id} className="minecraft-border bg-stone-800 p-3 flex items-center gap-3">
-              <div className={action.userId === 'player1' ? 'text-pink-400' : 'text-blue-400'}>
-                {getAchievementIcon(action.type)}
-              </div>
-              <div className="flex-1">
-                <p className="text-white text-sm">{action.description}</p>
-                <p className="text-gray-400 text-xs">{action.date}</p>
-              </div>
-              <span className={`pixel-font text-xs ${
-                action.userId === 'player1' ? 'text-pink-400' : 'text-blue-400'
-              }`}>
-                {action.userId === 'player1' ? '❤️' : '💙'}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
-
-    {/* READING TAB (Preserved) */}
-    {activeTab === 'reading' && (
-      <div className="minecraft-border bg-stone-700 p-4">
-        <h2 className="pixel-font text-white text-sm mb-4">
-          📚 Shared Reading List
-        </h2>
+      <section
+        id="reading-panel"
+        role="tabpanel"
+        aria-labelledby="reading-tab"
+        hidden={activeTab !== 'reading'}
+      >
+        <h2>📚 Shared Reading List</h2>
         <input
           value={readingTitle}
           onChange={(e) => setReadingTitle(e.target.value)}
           placeholder="Article/Video title"
-          className="w-full p-3 mb-2 minecraft-border bg-stone-800 text-white placeholder-gray-400"
+          aria-label="Reading title"
         />
         <input
           value={readingUrl}
           onChange={(e) => setReadingUrl(e.target.value)}
           placeholder="URL (optional)"
-          className="w-full p-3 mb-3 minecraft-border bg-stone-800 text-white placeholder-gray-400"
+          aria-label="Reading URL"
         />
-        <button
-          onClick={addReading}
-          className="minecraft-btn bg-blue-600 text-white px-6 py-2 pixel-font text-xs w-full"
-        >
-          Add Resource
-        </button>
+        <button onClick={addReading} className="btn">Add Resource</button>
 
-        <div className="mt-6 space-y-2">
+        <div className="card-list" style={{maxHeight: '250px', marginTop: 16}}>
           {readings.map((reading) => (
-            <div
+            <article
               key={reading.id}
-              className={`minecraft-border p-3 flex items-center justify-between ${
-                reading.completed ? 'bg-green-900' : 'bg-stone-800'
-              }`}
+              className="card"
+              style={{backgroundColor: reading.completed ? 'rgba(50,150,50,0.2)' : 'var(--panel-bg)'}}
+              role="listitem"
+              tabIndex={0}
             >
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs ${
-                    reading.addedBy === 'player1' ? 'text-pink-400' : 'text-blue-400'
-                  }`}>
-                    {reading.addedBy === 'player1' ? '❤️' : '💙'}
-                  </span>
-                  <span className={`text-sm ${
-                    reading.completed ? 'line-through text-gray-400' : 'text-white'
-                  }`}>
+              <div className="description" style={{flexGrow: 1}}>
+                <div style={{color: reading.addedBy === 'player1' ? '#ff6699' : '#6699ff', marginBottom: 4}}>
+                  {reading.addedBy === 'player1' ? '❤️' : '💙'}
+                  <span style={{marginLeft: 8, textDecoration: reading.completed ? 'line-through' : 'none'}}>
                     {reading.title}
                   </span>
                 </div>
                 {reading.url && (
-                  <a
-                    href={reading.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-300 text-xs hover:underline"
-                  >
+                  <a href={reading.url} target="_blank" rel="noopener noreferrer" style={{color: '#1e90ff', fontSize: '12px'}}>
                     🔗 Link
                   </a>
                 )}
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => toggleReading(reading.id, reading.completed)} className="text-white">
-                  <CheckCircle className={`w-5 h-5 ${reading.completed ? 'text-green-400' : 'text-gray-500'}`} />
+              <div>
+                <button onClick={() => toggleReading(reading.id, reading.completed)} aria-label={reading.completed ? 'Mark incomplete' : 'Mark complete'}>
+                  <CheckCircle size={20} color={reading.completed ? '#4caf50' : '#999'} />
                 </button>
-                <button onClick={() => deleteReading(reading.id)} className="text-red-400">
-                  <Trash2 className="w-5 h-5" />
+                <button onClick={() => deleteReading(reading.id)} aria-label="Delete reading" style={{marginLeft: '8px'}}>
+                  <Trash2 size={20} color="#f44336" />
                 </button>
               </div>
-            </div>
+            </article>
           ))}
         </div>
-      </div>
-    )}
+      </section>
 
-    {/* BADGES & STATS TAB (Enhanced) */}
-    {activeTab === 'badges' && (
-      <div className="minecraft-border bg-stone-700 p-4">
-        <h2 className="pixel-font text-white text-sm mb-4">
-          🏅 Badges & Stats
-        </h2>
-        <div className="grid grid-cols-2 gap-3 mb-6">
+      <section
+        id="badges-panel"
+        role="tabpanel"
+        aria-labelledby="badges-tab"
+        hidden={activeTab !== 'badges'}
+      >
+        <h2>🏅 Badges & Stats</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 24 }}>
           {getBadges().map((badge, idx) => (
-            <div key={idx} className="minecraft-border bg-amber-900 p-4 text-center">
-              <div className="text-4xl mb-2">{badge.icon}</div>
-              <div className="pixel-font text-white text-xs mb-1">{badge.name}</div>
-              <div className="text-gray-300 text-xs">{badge.desc}</div>
+            <div key={idx} className="card" style={{flexDirection: 'column', alignItems: 'center', textAlign: 'center'}}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>{badge.icon}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{badge.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{badge.desc}</div>
             </div>
           ))}
           {getBadges().length === 0 && (
-            <div className="col-span-2 text-center text-gray-400 py-8">
-              <p className="pixel-font text-xs">Keep grinding to earn badges! ⛏️</p>
+            <div style={{ gridColumn: 'span 2', color: 'var(--text-secondary)', fontSize: 14, textAlign: 'center', padding: 24 }}>
+              Keep grinding to earn badges! 💪
             </div>
           )}
         </div>
 
-        <div className="minecraft-border bg-stone-800 p-4">
-          <h3 className="pixel-font text-white text-xs mb-3">📊 Your Stats</h3>
-          <div className="space-y-2 text-sm text-white">
-            <div className="flex justify-between">
-              <span>Today's Score:</span>
-              <span className="font-bold text-green-400">{myScore} pts</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Total Actions:</span>
-              <span className="font-bold">
-                {actions.filter((a) => a.userId === currentPlayer).length}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Total Check-ins:</span>
-              <span className="font-bold">
-                {checkins.filter((c) => c.userId === currentPlayer).length}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Resources Shared:</span>
-              <span className="font-bold">
-                {readings.filter((r) => r.addedBy === currentPlayer).length}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Streak:</span>
-              <span className="font-bold">{getStreak()}</span>
-            </div>
+        <div className="card" style={{ flexDirection: 'column', gap: 14 }}>
+          <h3>Your Stats</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Today's Score:</span><span style={{ fontWeight: 600, color: '#4caf50' }}>{myScore} pts</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Total Actions:</span><span style={{ fontWeight: 600 }}>{actions.filter((a) => a.userId === currentPlayer).length}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Total Check-ins:</span><span style={{ fontWeight: 600 }}>{checkins.filter((c) => c.userId === currentPlayer).length}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Resources Shared:</span><span style={{ fontWeight: 600 }}>{readings.filter((r) => r.addedBy === currentPlayer).length}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Streak:</span><span style={{ fontWeight: 600 }}>{getStreak()}</span>
           </div>
         </div>
 
         {gameMode === 'multiplayer' && (
-          <div className="minecraft-border bg-stone-800 p-4 mt-4">
-            <h3 className="pixel-font text-white text-xs mb-3">👥 Team Stats</h3>
-            <div className="space-y-2 text-sm text-white">
-              <div className="flex justify-between">
-                <span>Today's Team Score:</span>
-                <span className="font-bold text-amber-400">{teamScore} pts</span>
-              </div>
-              <div className="flex justify-between">
-                <span>❤️ Your Score:</span>
-                <span className="font-bold text-pink-400">{myScore} pts</span>
-              </div>
-              <div className="flex justify-between">
-                <span>💙 Partner Score:</span>
-                <span className="font-bold text-blue-400">{otherScore} pts</span>
-              </div>
+          <div className="card" style={{ marginTop: 20, flexDirection: 'column', gap: 14 }}>
+            <h3>👥 Team Stats</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Today's Team Score:</span><span style={{ fontWeight: 600, color: 'var(--text-accent)' }}>{teamScore} pts</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>❤️ Your Score:</span><span style={{ fontWeight: 600, color: '#ff6699' }}>{myScore} pts</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>💙 Partner Score:</span><span style={{ fontWeight: 600, color: '#6699ff' }}>{otherScore} pts</span>
             </div>
           </div>
         )}
-      </div>
-    )}
-  </div>
+      </section>
 
-  <div className="max-w-4xl mx-auto mt-6 text-center text-green-300 text-xs">
-    <p className="pixel-font">Building our future together, one block at a time 💚</p>
-  </div>
-</div>
-);
+      <footer style={{ marginTop: 24 }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+          Building our future together, one step at a time 💚
+        </div>
+      </footer>
+    </div>
+  );
 };
 
-export default MinecraftGoalsApp;
+export default ModernGoalsApp;
