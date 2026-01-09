@@ -60,8 +60,16 @@
   padding: 0;
 }
 
+html {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+}
+
 body {
-  min-width: 320px;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg-gradient);
@@ -71,9 +79,19 @@ body {
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
   display: flex;
-  justify-content: center;
-  padding: 16px;
+  justify-content: flex-start;
+  padding: 0;
+  margin: 0;
   overflow-x: hidden;
+  align-items: stretch;
+}
+
+#root {
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Animated background */
@@ -202,17 +220,36 @@ body::before {
 /* ==================== GLASS CARD ==================== */
 
 .glass-card {
-  background: var(--panel-bg);
-  backdrop-filter: blur(var(--panel-blur));
-  -webkit-backdrop-filter: blur(var(--panel-blur));
-  border: 1px solid var(--panel-border);
-  border-radius: 24px;
-  box-shadow: var(--shadow-lg);
-  padding: 24px;
-  width: 100%;
-  max-width: 480px;
-  margin: auto;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 20px;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+  margin: 0 !important;
   animation: slideUp 0.5s ease-out;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  flex: 1;
+}
+
+@media (min-width: 769px) {
+  .glass-card {
+    max-width: 480px !important;
+    min-width: auto !important;
+    margin: auto !important;
+    border-radius: 24px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--panel-blur));
+    -webkit-backdrop-filter: blur(var(--panel-blur));
+    padding: 24px;
+    min-height: auto;
+  }
 }
 
 /* ==================== TYPOGRAPHY ==================== */
@@ -904,8 +941,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 320px;
-  overflow-y: auto;
+  overflow-y: visible;
   padding-right: 4px;
 }
 
@@ -2548,22 +2584,600 @@ footer {
 
 /* ==================== MOBILE OPTIMIZATIONS ==================== */
 
-/* iPhone specific adjustments */
+/* iPhone 17 Pro Max Specific (430 x 932 pixels) */
+@media (max-width: 430px) and (min-height: 900px) {
+  body {
+    padding: 0;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    background-attachment: fixed;
+    overflow-y: auto;
+    justify-content: flex-start;
+    align-items: stretch;
+  }
+
+  .glass-card {
+    max-width: 100%;
+    width: 100%;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    margin: 0;
+    padding: env(safe-area-inset-top, 20px) 20px env(safe-area-inset-bottom, 20px) 20px;
+    border-radius: 0;
+    border: none;
+    border-left: none;
+    border-right: none;
+    padding-top: max(20px, env(safe-area-inset-top));
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header adjustments for Dynamic Island */
+  header {
+    margin-bottom: 20px;
+    padding: 12px 0;
+    margin-top: 8px;
+  }
+
+  h1 {
+    font-size: 20px;
+    letter-spacing: -0.5px;
+  }
+
+  h2 {
+    font-size: 17px;
+    margin-bottom: 14px;
+  }
+
+  h3 {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  /* Improved button sizes for 6.9" display */
+  .btn {
+    padding: 12px 18px;
+    font-size: 15px;
+    min-height: 44px;
+  }
+
+  .btn-lg {
+    padding: 16px 24px;
+    font-size: 16px;
+    min-height: 52px;
+  }
+
+  .btn-icon {
+    padding: 10px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  /* XP Bar - Larger for better visibility */
+  .xp-section {
+    margin-bottom: 20px;
+  }
+
+  .xp-header {
+    margin-bottom: 10px;
+  }
+
+  .level-badge {
+    font-size: 13px;
+    padding: 6px 14px;
+  }
+
+  .xp-points {
+    font-size: 13px;
+  }
+
+  .xp-bar-wrapper {
+    height: 12px;
+  }
+
+  /* Score Section - Optimized spacing */
+  .score-section {
+    margin-bottom: 20px;
+  }
+
+  .score-card {
+    padding: 20px;
+  }
+
+  .score-players {
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .score-player {
+    padding: 16px 12px;
+  }
+
+  .score-player-emoji {
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+
+  .score-player-name {
+    font-size: 12px;
+  }
+
+  .score-player-points {
+    font-size: 28px;
+  }
+
+  .score-team {
+    padding: 18px;
+  }
+
+  .score-team-points {
+    font-size: 40px;
+  }
+
+  /* Quick Stats - Better spacing */
+  .quick-stats {
+    padding: 14px 16px;
+    gap: 10px;
+  }
+
+  .quick-stat-value {
+    font-size: 18px;
+  }
+
+  .quick-stat-label {
+    font-size: 11px;
+  }
+
+  /* Tabs - Larger touch targets */
+  .tabs {
+    gap: 8px;
+    padding: 6px;
+    margin-bottom: 20px;
+  }
+
+  .tabs button {
+    padding: 12px 8px;
+    font-size: 12px;
+    gap: 6px;
+    min-height: 44px;
+  }
+
+  .tabs button .tab-icon {
+    font-size: 18px;
+  }
+
+  /* Forms - Optimized for iOS keyboard */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+  }
+
+  textarea {
+    min-height: 90px;
+  }
+
+  /* Check-in Status */
+  .checkin-status {
+    padding: 16px 18px;
+    margin-bottom: 18px;
+    border-radius: 16px;
+  }
+
+  .status-icon {
+    font-size: 24px;
+  }
+
+  .status-text {
+    font-size: 14px;
+  }
+
+  /* Daily Goal */
+  .daily-goal {
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+
+  .daily-goal-header {
+    margin-bottom: 12px;
+  }
+
+  .daily-goal-title {
+    font-size: 14px;
+  }
+
+  .daily-goal-count {
+    font-size: 13px;
+  }
+
+  .daily-goal-bar {
+    height: 10px;
+  }
+
+  /* Action Type Grid - 3 columns for better layout */
+  .action-type-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .action-type-btn {
+    padding: 12px 8px;
+    min-height: 44px;
+  }
+
+  .action-type-icon {
+    font-size: 20px;
+  }
+
+  .action-type-label {
+    font-size: 11px;
+  }
+
+  /* Scoring Info */
+  .scoring-info {
+    padding: 16px;
+    margin-top: 18px;
+  }
+
+  .scoring-list li {
+    padding: 8px 0;
+    font-size: 13px;
+  }
+
+  /* Card List - Optimized height for 932px screen */
+  .card-list {
+    gap: 12px;
+    overflow-y: visible;
+  }
+
+  .card {
+    padding: 14px 16px;
+    gap: 12px;
+    border-radius: 16px;
+  }
+
+  .card-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
+  }
+
+  .card-title {
+    font-size: 14px;
+  }
+
+  .card-subtitle {
+    font-size: 12px;
+  }
+
+  .card-points {
+    font-size: 14px;
+    padding: 4px 10px;
+  }
+
+  /* Reading Cards */
+  .reading-card {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .reading-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .reading-title {
+    font-size: 14px;
+  }
+
+  .reading-link {
+    font-size: 12px;
+  }
+
+  /* Badges Grid */
+  .badges-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .badge-card {
+    padding: 18px 14px;
+  }
+
+  .badge-icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+  }
+
+  .badge-name {
+    font-size: 14px;
+  }
+
+  .badge-desc {
+    font-size: 11px;
+  }
+
+  /* Stats Card */
+  .stats-card {
+    padding: 18px;
+  }
+
+  .stat-row {
+    padding: 10px 0;
+  }
+
+  .stat-label {
+    font-size: 14px;
+  }
+
+  .stat-label-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .stat-value {
+    font-size: 16px;
+  }
+
+  /* Versus Display */
+  .versus-display {
+    padding: 20px;
+    gap: 16px;
+  }
+
+  .versus-avatar {
+    font-size: 40px;
+  }
+
+  .versus-name {
+    font-size: 13px;
+  }
+
+  .versus-score {
+    font-size: 28px;
+  }
+
+  .versus-vs {
+    font-size: 18px;
+  }
+
+  /* Player Select */
+  .player-select-container {
+    gap: 14px;
+    flex-direction: column;
+  }
+
+  .player-btn {
+    padding: 28px 20px;
+    width: 100%;
+    border-radius: 20px;
+  }
+
+  .player-emoji {
+    font-size: 48px;
+  }
+
+  .player-name {
+    font-size: 16px;
+  }
+
+  /* Mode Select */
+  .mode-select-container {
+    gap: 12px;
+  }
+
+  .mode-btn {
+    padding: 18px 22px;
+  }
+
+  .mode-icon {
+    font-size: 28px;
+    min-width: 40px;
+  }
+
+  .mode-title {
+    font-size: 16px;
+  }
+
+  .mode-desc {
+    font-size: 12px;
+  }
+
+  /* Toast Notifications - Better positioning */
+  .toast-container {
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: 16px;
+    right: 16px;
+    transform: none;
+  }
+
+  .toast {
+    padding: 14px 18px;
+  }
+
+  .toast-icon {
+    font-size: 20px;
+  }
+
+  .toast-message {
+    font-size: 14px;
+  }
+
+  /* Level Up Modal */
+  .level-up-modal {
+    margin: 20px;
+    padding: 36px 28px;
+    max-width: calc(100% - 40px);
+  }
+
+  .level-up-icon {
+    font-size: 56px;
+    margin-bottom: 14px;
+  }
+
+  .level-up-title {
+    font-size: 26px;
+  }
+
+  .level-up-level {
+    font-size: 44px;
+    margin-bottom: 14px;
+  }
+
+  .level-up-message {
+    font-size: 14px;
+    margin-bottom: 22px;
+  }
+
+  .level-up-btn {
+    padding: 14px 32px;
+    font-size: 16px;
+  }
+
+  /* Empty States */
+  .empty-state {
+    padding: 36px 20px;
+  }
+
+  .empty-state-icon {
+    font-size: 52px;
+    margin-bottom: 14px;
+  }
+
+  .empty-state-title {
+    font-size: 16px;
+  }
+
+  .empty-state-text {
+    font-size: 13px;
+  }
+
+  /* Progress Bars */
+  .progress-section {
+    margin-bottom: 18px;
+  }
+
+  .progress-item {
+    margin-bottom: 14px;
+  }
+
+  .progress-label {
+    font-size: 13px;
+  }
+
+  .progress-value {
+    font-size: 13px;
+  }
+
+  .progress-bar {
+    height: 8px;
+  }
+
+  /* Streak Badge */
+  .streak-badge {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+
+  /* Footer */
+  footer {
+    margin-top: 24px;
+    padding-top: 18px;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .footer-text {
+    font-size: 12px;
+  }
+
+  /* Section Divider */
+  .section-divider {
+    margin: 22px 0;
+  }
+
+  /* Player Indicator */
+  .player-indicator {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .player-indicator-emoji {
+    font-size: 16px;
+  }
+
+  /* Loading Screen */
+  .loading-icon-wrapper {
+    width: 80px;
+    height: 80px;
+  }
+
+  .loading-spinner {
+    width: 80px;
+    height: 80px;
+  }
+
+  .loading-emoji {
+    font-size: 32px;
+  }
+
+  .loading-title {
+    font-size: 20px;
+  }
+
+  .loading-subtitle {
+    font-size: 14px;
+  }
+
+  .loading-progress {
+    width: 220px;
+  }
+
+  /* Smooth scrolling */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Better tap highlights */
+  button,
+  a,
+  .card,
+  .reading-card,
+  .badge-card {
+    -webkit-tap-highlight-color: rgba(168, 85, 247, 0.2);
+  }
+}
+
+/* General iPhone specific adjustments */
 @media (max-width: 480px) {
   body {
     padding: 0;
     min-height: 100vh;
     min-height: -webkit-fill-available;
+    overflow-y: auto;
+    justify-content: flex-start;
+    align-items: stretch;
   }
 
   .glass-card {
-    max-width: 100%;
+    max-width: 100% !important;
+    width: 100% !important;
     min-height: 100vh;
     min-height: -webkit-fill-available;
-    margin: 0;
+    margin: 0 !important;
     padding: 16px;
     border-radius: 0;
     border: none;
+    border-left: none;
+    border-right: none;
+    display: flex;
+    flex-direction: column;
   }
 
   /* Header adjustments */
@@ -2776,8 +3390,8 @@ footer {
 
   /* Card List */
   .card-list {
-    max-height: 280px;
     gap: 10px;
+    overflow-y: visible;
   }
 
   .card {
@@ -3156,7 +3770,8 @@ footer {
   }
 
   /* Improve scrolling on iOS */
-  .card-list {
+  .glass-card {
     -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
   }
 }

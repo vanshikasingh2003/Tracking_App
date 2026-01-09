@@ -440,7 +440,7 @@ const ModernGoalsApp: React.FC = () => {
   // Player Selection Screen
   if (!currentPlayer) {
     return (
-      <div className="glass-card" style={{ marginTop: 48 }}>
+      <div className="glass-card">
         <header>
           <h1>Our Adventure Log</h1>
         </header>
@@ -472,7 +472,7 @@ const ModernGoalsApp: React.FC = () => {
     const badges = getBadges();
 
     return (
-      <div className="glass-card" style={{ marginTop: 24 }}>
+      <div className="glass-card">
         <header>
           <h1>Our Adventure Log</h1>
           <button className="btn btn-icon" onClick={switchPlayer}>
